@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS public.requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   helper_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  requester_name TEXT,
   title TEXT NOT NULL,
   category TEXT NOT NULL,
   subject TEXT,
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS public.requests (
 );
 
 -- If the table already exists in your database, run these ALTER statements:
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS requester_name TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS attachment_name TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS delivery_file_url TEXT;
@@ -75,6 +77,8 @@ CREATE INDEX IF NOT EXISTS idx_requests_created_at ON public.requests(created_at
 CREATE OR REPLACE VIEW public.requests_public AS
 SELECT
   id,
+  user_id,
+  requester_name,
   title,
   category,
   subject,

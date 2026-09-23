@@ -159,7 +159,14 @@ export default function RequestDetail() {
   return (
     <section className="wrap" style={{ paddingTop: 40, paddingBottom: 60 }}>
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
-        <span className="badge">{request.category}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <span className="badge">{request.category}</span>
+          {request.requester_name && (
+            <span style={{ fontSize: 13, color: 'rgba(18,20,43,0.7)', fontWeight: 600 }}>
+              👤 Requested by: {request.requester_name}
+            </span>
+          )}
+        </div>
         <h1 style={{ fontSize: 26, marginTop: 12 }}>{request.title}</h1>
         <div className="tag-row" style={{ marginTop: 10 }}>
           <span className="tag">{request.subject || 'General'}</span>

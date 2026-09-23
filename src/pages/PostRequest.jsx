@@ -78,6 +78,7 @@ export default function PostRequest() {
       setUploadStatus('Saving request…');
       await postRequest({
         title: cleanText(data.title, 150),
+        requester_name: cleanText(user?.name || 'Student', 100),
         category: data.category,
         subject: cleanText(data.subject, 80),
         academic_level: data.academic_level,
