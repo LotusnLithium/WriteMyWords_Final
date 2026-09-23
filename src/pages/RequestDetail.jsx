@@ -157,9 +157,9 @@ export default function RequestDetail() {
   }
 
   return (
-    <section className="wrap" style={{ paddingTop: 40, paddingBottom: 60 }}>
+    <section className="wrap" style={{ paddingTop: 'clamp(20px, 4vw, 40px)', paddingBottom: 'clamp(32px, 5vw, 60px)' }}>
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <span className="badge">{request.category}</span>
           {request.requester_name && (
             <span style={{ fontSize: 13, color: 'rgba(18,20,43,0.7)', fontWeight: 600 }}>
@@ -167,26 +167,28 @@ export default function RequestDetail() {
             </span>
           )}
         </div>
-        <h1 style={{ fontSize: 26, marginTop: 12 }}>{request.title}</h1>
+
+        <h1 style={{ fontSize: 'clamp(22px, 5vw, 28px)', marginTop: 12 }}>{request.title}</h1>
+        
         <div className="tag-row" style={{ marginTop: 10 }}>
           <span className="tag">{request.subject || 'General'}</span>
           <span className="tag">{request.academic_level}</span>
         </div>
 
-        <p className="muted" style={{ marginTop: 14, fontSize: 15, lineHeight: 1.6 }}>
+        <p className="muted" style={{ marginTop: 14, fontSize: 15, lineHeight: 1.6, wordBreak: 'break-word' }}>
           {request.description || 'No description added.'}
         </p>
 
         {/* Work Provider's Attached Document */}
         {(request.attachment_url || request.attachment_name) && (
           <div className="document-attachment-card" style={{ marginTop: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 24 }}>📎</span>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+              <span style={{ fontSize: 24, flexShrink: 0 }}>📎</span>
+              <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Student Attached Document
                 </div>
-                <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2 }}>
+                <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                   {request.attachment_name || 'Assignment Brief'}
                 </div>
               </div>
@@ -227,7 +229,7 @@ export default function RequestDetail() {
         </div>
 
         {!isParticipant && (
-          <button className="btn btn-primary" style={{ marginTop: 20 }} disabled={busy} onClick={handleClaim}>
+          <button className="btn btn-primary btn-block" style={{ marginTop: 20 }} disabled={busy} onClick={handleClaim}>
             {busy ? 'Claiming…' : 'Help With This'}
           </button>
         )}
@@ -253,7 +255,7 @@ export default function RequestDetail() {
                     borderRadius: 10,
                     border: '1px solid var(--border-strong)',
                     fontFamily: 'inherit',
-                    fontSize: 14,
+                    fontSize: 16,
                   }}
                   value={deliveryDraft}
                   onChange={(e) => setDeliveryDraft(e.target.value)}
@@ -280,16 +282,18 @@ export default function RequestDetail() {
                       <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
                         Click to upload Word Document (.docx, .doc, .pdf)
                       </div>
-                      <div className="muted" style={{ fontSize: 12 }}>
+                      <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
                         Attach your completed guidance document (up to 25MB)
                       </div>
                     </label>
                   ) : (
                     <div className="file-selected-badge">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 22 }}>📘</span>
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{deliveryFile.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                        <span style={{ fontSize: 22, flexShrink: 0 }}>📘</span>
+                        <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {deliveryFile.name}
+                          </div>
                           <div className="muted" style={{ fontSize: 12 }}>{formatBytes(deliveryFile.size)}</div>
                         </div>
                       </div>
@@ -297,7 +301,7 @@ export default function RequestDetail() {
                         type="button"
                         onClick={() => setDeliveryFile(null)}
                         className="btn btn-ghost btn-sm"
-                        style={{ color: 'var(--error)', padding: '4px 10px' }}
+                        style={{ color: 'var(--error)', padding: '4px 10px', flexShrink: 0 }}
                       >
                         Remove
                       </button>
@@ -306,7 +310,7 @@ export default function RequestDetail() {
                 </div>
 
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-primary btn-block"
                   style={{ marginTop: 16 }}
                   disabled={busy}
                   onClick={handleDeliver}
@@ -319,13 +323,13 @@ export default function RequestDetail() {
             {/* Delivered State */}
             {request.status === 'delivered' && (
               <div className="card" style={{ marginTop: 22, background: 'rgba(49, 87, 213, 0.03)', borderColor: 'var(--blue)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
                   <h3 style={{ fontSize: 17 }}>Delivered Guidance</h3>
                   <span className="badge badge-warn">Awaiting Approval</span>
                 </div>
 
                 {request.delivery_text && (
-                  <p style={{ fontSize: 14.5, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                  <p style={{ fontSize: 14.5, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.6, wordBreak: 'break-word' }}>
                     {request.delivery_text}
                   </p>
                 )}
@@ -333,13 +337,13 @@ export default function RequestDetail() {
                 {/* Delivered Word Document */}
                 {(request.delivery_file_url || request.delivery_file_name) && (
                   <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ fontSize: 26 }}>📘</span>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                      <span style={{ fontSize: 26, flexShrink: 0 }}>📘</span>
+                      <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
                           Delivered Word Document
                         </div>
-                        <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                           {request.delivery_file_name || 'Completed Guidance Document.docx'}
                         </div>
                       </div>
@@ -363,7 +367,7 @@ export default function RequestDetail() {
                     <p style={{ fontSize: 13.5, color: 'rgba(18,20,43,0.7)', marginBottom: 12 }}>
                       Review the guidance and document above. Once satisfied, click below to approve and pay the helper.
                     </p>
-                    <button className="btn btn-primary" disabled={busy} onClick={handleApproveAndPay}>
+                    <button className="btn btn-primary btn-block" disabled={busy} onClick={handleApproveAndPay}>
                       {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${request.budget_max}`}
                     </button>
                   </div>
@@ -374,13 +378,13 @@ export default function RequestDetail() {
             {/* Approved State */}
             {request.status === 'approved' && (
               <div className="card" style={{ marginTop: 22, background: 'rgba(47, 143, 104, 0.04)', borderColor: 'var(--success)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
                   <h3 style={{ fontSize: 17 }}>Delivered Guidance (Completed)</h3>
                   <span className="badge badge-success">✓ Paid & Approved</span>
                 </div>
 
                 {request.delivery_text && (
-                  <p style={{ fontSize: 14.5, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                  <p style={{ fontSize: 14.5, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.6, wordBreak: 'break-word' }}>
                     {request.delivery_text}
                   </p>
                 )}
@@ -388,13 +392,13 @@ export default function RequestDetail() {
                 {/* Delivered Word Document */}
                 {(request.delivery_file_url || request.delivery_file_name) && (
                   <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ fontSize: 26 }}>📘</span>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--success)', textTransform: 'uppercase' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                      <span style={{ fontSize: 26, flexShrink: 0 }}>📘</span>
+                      <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--success)', textTransform: 'uppercase' }}>
                           Attached Document
                         </div>
-                        <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                           {request.delivery_file_name || 'Completed Guidance Document.docx'}
                         </div>
                       </div>
@@ -418,13 +422,13 @@ export default function RequestDetail() {
             {/* Messages Thread */}
             <div className="card" style={{ marginTop: 22 }}>
               <h3 style={{ fontSize: 16, marginBottom: 12 }}>Messages</h3>
-              <div style={{ maxHeight: 280, overflowY: 'auto', marginBottom: 12 }}>
+              <div style={{ maxHeight: 280, overflowY: 'auto', marginBottom: 12, paddingRight: 4 }}>
                 {messages.length ? (
                   messages.map((m) => (
                     <div
                       key={m.id}
                       style={{
-                        maxWidth: '78%',
+                        maxWidth: '85%',
                         padding: '10px 14px',
                         borderRadius: 14,
                         fontSize: 14,
@@ -432,6 +436,8 @@ export default function RequestDetail() {
                         marginLeft: m.sender_id === user.id ? 'auto' : 0,
                         background: m.sender_id === user.id ? 'var(--ink)' : 'var(--soft-blue)',
                         color: m.sender_id === user.id ? '#fff' : 'var(--ink)',
+                        wordBreak: 'break-word',
+                        lineHeight: 1.45,
                       }}
                     >
                       {m.body}
@@ -453,9 +459,11 @@ export default function RequestDetail() {
                     borderRadius: 10,
                     border: '1px solid var(--border-strong)',
                     fontFamily: 'inherit',
+                    fontSize: 16,
+                    minWidth: 0,
                   }}
                 />
-                <button className="btn btn-primary btn-sm" type="submit" disabled={busy}>
+                <button className="btn btn-primary btn-sm" type="submit" disabled={busy} style={{ flexShrink: 0 }}>
                   Send
                 </button>
               </form>

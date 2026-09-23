@@ -102,14 +102,14 @@ export default function PostRequest() {
   }
 
   return (
-    <section className="wrap" style={{ paddingTop: 48, paddingBottom: 60 }}>
-      <div style={{ maxWidth: 580, margin: '0 auto' }}>
-        <h2 style={{ fontSize: 26, marginBottom: 6 }}>What do you need help with?</h2>
-        <p className="muted" style={{ fontSize: 14.5, marginBottom: 26 }}>
+    <section className="wrap" style={{ paddingTop: 'clamp(24px, 5vw, 48px)', paddingBottom: 'clamp(32px, 5vw, 60px)' }}>
+      <div style={{ maxWidth: 600, margin: '0 auto' }}>
+        <h2 style={{ fontSize: 'clamp(22px, 4.5vw, 28px)', marginBottom: 6 }}>What do you need help with?</h2>
+        <p className="muted" style={{ fontSize: 14.5, marginBottom: 22 }}>
           Add the assignment details and document brief, then it goes live on the board.
         </p>
 
-        <form onSubmit={handleSubmit} className="card" style={{ padding: 28 }}>
+        <form onSubmit={handleSubmit} className="card">
           <div className="field">
             <label>Title</label>
             <input
@@ -129,7 +129,7 @@ export default function PostRequest() {
             </select>
           </div>
 
-          <div style={{ display: 'flex', gap: 14 }}>
+          <div className="form-row-2">
             <div className="field" style={{ flex: 1 }}>
               <label>Subject</label>
               <input value={data.subject} onChange={update('subject')} placeholder="e.g. Marketing / Economics" maxLength={80} />
@@ -177,9 +177,9 @@ export default function PostRequest() {
                 </label>
               ) : (
                 <div className="file-selected-badge">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
-                    <span style={{ fontSize: 22 }}>📎</span>
-                    <div style={{ overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', minWidth: 0, flex: 1 }}>
+                    <span style={{ fontSize: 22, flexShrink: 0 }}>📎</span>
+                    <div style={{ overflow: 'hidden', minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 14, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         {file.name}
                       </div>
@@ -190,7 +190,7 @@ export default function PostRequest() {
                     type="button"
                     onClick={() => setFile(null)}
                     className="btn btn-ghost btn-sm"
-                    style={{ color: 'var(--error)', borderColor: 'rgba(217,85,85,0.2)', padding: '4px 10px' }}
+                    style={{ color: 'var(--error)', borderColor: 'rgba(217,85,85,0.2)', padding: '4px 10px', flexShrink: 0 }}
                   >
                     Remove
                   </button>
@@ -199,7 +199,7 @@ export default function PostRequest() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 14 }}>
+          <div className="form-row-2">
             <div className="field" style={{ flex: 1 }}>
               <label>Deadline</label>
               <select value={data.deadline} onChange={update('deadline')}>
@@ -209,13 +209,13 @@ export default function PostRequest() {
             <div className="field" style={{ flex: 1 }}>
               <label>Budget (₹, min–max)</label>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input type="number" min="0" value={data.budget_min} onChange={update('budget_min')} />
-                <input type="number" min="0" value={data.budget_max} onChange={update('budget_max')} />
+                <input type="number" min="0" placeholder="Min" value={data.budget_min} onChange={update('budget_min')} />
+                <input type="number" min="0" placeholder="Max" value={data.budget_max} onChange={update('budget_max')} />
               </div>
             </div>
           </div>
 
-          <div className="field-hint" style={{ marginBottom: 18 }}>
+          <div className="field-hint" style={{ marginBottom: 20 }}>
             💡 You will pay your maximum budget only after you approve the deliverable you receive.
           </div>
 
