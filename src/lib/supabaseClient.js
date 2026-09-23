@@ -283,15 +283,30 @@ export async function sendMessage(requestId, senderId, body) {
 }
 
 // Live-updates the thread as new messages arrive, so both sides see replies
-// without refreshing. No-ops (returns a no-op unsubscribe) if Supabase isn't configured.
+// without refreshing.
 export function subscribeToMessages(requestId, onInsert) {
   if (!supabase) return () => {};
   const channel = supabase
-    .channel(`messages:${requestId}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `request_id=eq.${requestId}` },
-      (payload) => onInsert(payload.new))
+    .channel(`realtime:messages:${requestId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `request_id=eq.${requestId}`,
+      },
+      (payload) => {
+        if (payload?.new) {
+          onInsert(payload.new);
+        }
+      }
+    )
     .subscribe();
-  return () => supabase.removeChannel(channel);
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 /* ---------------- payments (Razorpay, via Edge Functions) ----------------

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import {
@@ -23,6 +23,7 @@ export default function RequestDetail() {
   const [deliveryFile, setDeliveryFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState('');
+  const messagesEndRef = useRef(null);
 
   const request = useMemo(
     () => myRequests.find((r) => r.id === id) || requests.find((r) => r.id === id),
@@ -30,11 +31,51 @@ export default function RequestDetail() {
   );
   const isParticipant = request && (request.user_id === user?.id || request.helper_id === user?.id);
 
+  // Auto-scroll chat to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Real-time synchronization + polling heartbeat for instant message delivery
   useEffect(() => {
     if (!isParticipant) return;
-    fetchMessages(id).then(setMessages);
-    const unsubscribe = subscribeToMessages(id, (m) => setMessages((prev) => [...prev, m]));
-    return unsubscribe;
+
+    // 1. Initial fetch
+    fetchMessages(id).then((initial) => {
+      if (initial) setMessages(initial);
+    });
+
+    // 2. Real-time WebSocket subscription
+    const unsubscribe = subscribeToMessages(id, (newMsg) => {
+      if (!newMsg) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
+    });
+
+    // 3. Fallback polling heartbeat (every 2.5s) to guarantee messages appear instantly
+    // even if mobile network temporarily pauses WebSockets
+    const pollInterval = setInterval(async () => {
+      try {
+        const latest = await fetchMessages(id);
+        if (latest && Array.isArray(latest)) {
+          setMessages((prev) => {
+            if (latest.length !== prev.length || (latest.length > 0 && latest[latest.length - 1]?.id !== prev[prev.length - 1]?.id)) {
+              return latest;
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        // quiet ignore polling glitch
+      }
+    }, 2500);
+
+    return () => {
+      unsubscribe();
+      clearInterval(pollInterval);
+    };
   }, [id, isParticipant]);
 
   if (authLoading) return <div className="wrap" style={{ padding: '60px 0' }}>Loading…</div>;
@@ -77,16 +118,32 @@ export default function RequestDetail() {
 
   async function handleSend(e) {
     e.preventDefault();
-    if (!draft.trim() || busy) return;
-    setBusy(true);
+    const textToSend = draft.trim();
+    if (!textToSend || busy) return;
+
+    // Optimistic message append so sender sees it instantly
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg = {
+      id: tempId,
+      request_id: id,
+      sender_id: user.id,
+      body: textToSend,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setDraft('');
+
     try {
-      const msg = await sendMessage(id, user.id, draft.trim());
-      if (msg) setMessages((prev) => [...prev, msg]);
-      setDraft('');
-    } catch {
-      toast('Message could not be sent.');
-    } finally {
-      setBusy(false);
+      const persistedMsg = await sendMessage(id, user.id, textToSend);
+      if (persistedMsg) {
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? persistedMsg : m)));
+      }
+    } catch (err) {
+      console.error('Send message error:', err);
+      toast('Message could not be sent. Please check your connection.');
+      // Remove failed optimistic message
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setDraft(textToSend);
     }
   }
 
@@ -446,6 +503,7 @@ export default function RequestDetail() {
                 ) : (
                   <p className="muted" style={{ fontSize: 13.5 }}>No messages yet — say hello.</p>
                 )}
+                <div ref={messagesEndRef} />
               </div>
               <form onSubmit={handleSend} style={{ display: 'flex', gap: 8 }}>
                 <input
