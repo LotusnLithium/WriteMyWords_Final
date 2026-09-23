@@ -165,14 +165,47 @@ export async function claimRequest(id, helperId) {
   return data;
 }
 
-// Helper submits their guidance/feedback — the deliverable is explicitly
-// framed as support, not a finished assignment (enforced in the UI copy,
-// not just here).
-export async function submitDelivery(id, deliveryText) {
+// Upload document/attachment to Supabase Storage
+export async function uploadAttachment(file, folder = 'documents') {
+  if (!supabase || !file) return null;
+  const safeName = (file.name || 'document').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filePath = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${safeName}`;
+  
+  const { data, error } = await supabase.storage
+    .from('request_attachments')
+    .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+  if (error) {
+    console.warn('Storage upload error:', error);
+    throw new Error(error.message || 'Failed to upload document.');
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('request_attachments')
+    .getPublicUrl(filePath);
+
+  return {
+    url: urlData?.publicUrl || '',
+    name: file.name,
+    size: file.size,
+  };
+}
+
+// Helper submits their guidance/feedback + optional Word document / file
+export async function submitDelivery(id, payload) {
   if (!supabase) return null;
+  const updateData = typeof payload === 'string'
+    ? { delivery_text: cleanText(payload, 4000), status: 'delivered' }
+    : {
+        delivery_text: cleanText(payload.deliveryText || '', 4000),
+        delivery_file_url: payload.deliveryFileUrl || null,
+        delivery_file_name: payload.deliveryFileName || null,
+        status: 'delivered',
+      };
+
   const { data, error } = await supabase
     .from('requests')
-    .update({ delivery_text: cleanText(deliveryText, 4000), status: 'delivered' })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();

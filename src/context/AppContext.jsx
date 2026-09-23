@@ -106,8 +106,8 @@ export function AppProvider({ children }) {
     return row;
   }, [session, refreshMine, refreshBoard]);
 
-  const deliver = useCallback(async (requestId, text) => {
-    const row = await submitDelivery(requestId, text);
+  const deliver = useCallback(async (requestId, payload) => {
+    const row = await submitDelivery(requestId, payload);
     await refreshMine();
     return row;
   }, [refreshMine]);

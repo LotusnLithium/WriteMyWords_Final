@@ -101,3 +101,23 @@ footer{border-top:1px solid var(--border); padding:44px 0; margin-top:20px; font
 
 #toast-host{position:fixed; bottom:22px; left:50%; transform:translateX(-50%); z-index:200;}
 .toast{background:var(--ink); color:#fff; padding:12px 18px; border-radius:var(--r-sm); font-size:14px; box-shadow:var(--shadow);}
+
+/* File upload & Document Cards */
+.file-upload-box{margin-top:4px;}
+.file-upload-label{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  border:2px dashed var(--border-strong); border-radius:var(--r-md);
+  padding:22px 16px; background:rgba(238,240,247,0.4); text-align:center; cursor:pointer;
+  transition:border-color 150ms ease, background 150ms ease;
+}
+.file-upload-label:hover{border-color:var(--blue); background:var(--soft-blue);}
+.file-selected-badge{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  background:var(--warm-white); border:1.5px solid var(--border-strong);
+  border-radius:var(--r-md); padding:12px 16px; box-shadow:var(--shadow);
+}
+.document-attachment-card{
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  background:var(--soft-blue); border:1px solid rgba(49,87,213,0.18);
+  border-radius:var(--r-md); padding:14px 18px; flex-wrap:wrap;
+}
