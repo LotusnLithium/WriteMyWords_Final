@@ -138,15 +138,11 @@ export default function Nav() {
             )}
           </div>
 
-          {/* Mobile Right Controls: Quick Dashboard Button + Hamburger */}
-          <div className="mobile-only" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {user ? (
-              <Link to="/dashboard" className="btn btn-ghost btn-sm" style={{ padding: '7px 12px', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          {/* Mobile Right Controls: Hamburger Menu Toggle */}
+          <div className="mobile-only">
+            {user && (
+              <Link to="/dashboard" className="btn btn-ghost btn-sm" style={{ padding: '6px 10px', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, marginRight: 8 }}>
                 <IconDashboard size={14} /> Dashboard
-              </Link>
-            ) : (
-              <Link to="/login" className="btn btn-ghost btn-sm" style={{ padding: '7px 12px', fontSize: 13 }}>
-                Log In
               </Link>
             )}
 
