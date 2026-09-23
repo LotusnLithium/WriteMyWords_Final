@@ -101,10 +101,11 @@ export function AppProvider({ children }) {
 
   const claim = useCallback(async (requestId) => {
     if (!session?.user) throw new Error('You need to be signed in to help.');
-    const row = await claimRequest(requestId, session.user.id);
+    const helperName = user?.name || session.user?.user_metadata?.name || 'Expert';
+    const row = await claimRequest(requestId, session.user.id, helperName);
     await refreshMine(); await refreshBoard();
     return row;
-  }, [session, refreshMine, refreshBoard]);
+  }, [session, user, refreshMine, refreshBoard]);
 
   const deliver = useCallback(async (requestId, payload) => {
     const row = await submitDelivery(requestId, payload);

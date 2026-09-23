@@ -214,6 +214,11 @@ export default function RequestDetail() {
           <div className="muted" style={{ fontSize: 14, marginTop: 6 }}>
             Deadline: <strong style={{ color: 'var(--ink)' }}>{request.deadline}</strong>
           </div>
+          {request.helper_name && (
+            <div className="muted" style={{ fontSize: 14, marginTop: 6 }}>
+              Assigned Helper: <strong style={{ color: 'var(--blue)' }}>🤝 {request.helper_name}</strong>
+            </div>
+          )}
           {isParticipant && (
             <div className="muted" style={{ fontSize: 14, marginTop: 6 }}>
               Status: <strong style={{ color: 'var(--ink)' }}>{STATUS_LABEL[request.status] || request.status}</strong>

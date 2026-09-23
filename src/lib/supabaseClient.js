@@ -153,11 +153,14 @@ export async function fetchRequestById(id) {
 
 // Helper claims an open request. The trigger in writemywords_schema.sql
 // rejects this if it's already claimed by someone else.
-export async function claimRequest(id, helperId) {
+export async function claimRequest(id, helperId, helperName) {
   if (!supabase) return null;
+  const updateData = { helper_id: helperId, status: 'claimed' };
+  if (helperName) updateData.helper_name = cleanText(helperName, 100);
+
   const { data, error } = await supabase
     .from('requests')
-    .update({ helper_id: helperId, status: 'claimed' })
+    .update(updateData)
     .eq('id', id)
     .select()
     .single();
