@@ -111,8 +111,23 @@ export async function getProfile(userId) {
 // succeeds when called by the signed-in student themselves.
 export async function insertRequest(row, userId) {
   if (!supabase) { console.warn('Supabase not configured — request not saved:', row); return null; }
-  const { data, error } = await supabase.from('requests').insert([{ ...row, user_id: userId }]).select().single();
-  if (error) { console.warn('insertRequest failed', error); return null; }
+  let { data, error } = await supabase.from('requests').insert([{ ...row, user_id: userId }]).select().single();
+  
+  if (error && error.message && (error.message.includes('requester_name') || error.message.includes('attachment_') || error.message.includes('schema cache'))) {
+    console.warn('Retrying insertRequest without optional columns due to schema cache:', error.message);
+    const fallbackRow = { ...row };
+    delete fallbackRow.requester_name;
+    delete fallbackRow.attachment_url;
+    delete fallbackRow.attachment_name;
+    const retry = await supabase.from('requests').insert([{ ...fallbackRow, user_id: userId }]).select().single();
+    if (retry.error) {
+      console.warn('insertRequest fallback failed', retry.error);
+      throw retry.error;
+    }
+    return retry.data;
+  }
+  
+  if (error) { console.warn('insertRequest failed', error); throw error; }
   return data;
 }
 
@@ -153,12 +168,29 @@ export async function claimRequest(id, helperId, helperName) {
   const updateData = { helper_id: helperId, status: 'claimed' };
   if (helperName) updateData.helper_name = cleanText(helperName, 100);
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('requests')
     .update(updateData)
     .eq('id', id)
     .select()
     .single();
+
+  // If the database schema has not been updated with helper_name yet, retry without helper_name
+  if (error && error.message && (error.message.includes('helper_name') || error.message.includes('schema cache'))) {
+    console.warn('helper_name column not found in schema cache, retrying without helper_name...');
+    const retry = await supabase
+      .from('requests')
+      .update({ helper_id: helperId, status: 'claimed' })
+      .eq('id', id)
+      .select()
+      .single();
+    if (retry.error) {
+      console.warn('claimRequest fallback failed', retry.error);
+      throw retry.error;
+    }
+    return retry.data;
+  }
+
   if (error) { console.warn('claimRequest failed', error); throw error; }
   return data;
 }
@@ -201,12 +233,32 @@ export async function submitDelivery(id, payload) {
         status: 'delivered',
       };
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('requests')
     .update(updateData)
     .eq('id', id)
     .select()
     .single();
+
+  // If delivery_file columns don't exist yet, retry with delivery_text only
+  if (error && error.message && (error.message.includes('delivery_file') || error.message.includes('schema cache'))) {
+    console.warn('delivery_file columns missing in schema cache, falling back to delivery_text...');
+    const retry = await supabase
+      .from('requests')
+      .update({
+        delivery_text: typeof payload === 'string' ? cleanText(payload, 4000) : cleanText(payload.deliveryText || '', 4000),
+        status: 'delivered',
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    if (retry.error) {
+      console.warn('submitDelivery fallback failed', retry.error);
+      throw retry.error;
+    }
+    return retry.data;
+  }
+
   if (error) { console.warn('submitDelivery failed', error); throw error; }
   return data;
 }
