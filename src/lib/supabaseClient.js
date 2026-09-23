@@ -217,17 +217,39 @@ export function subscribeToMessages(requestId, onInsert) {
    The two Edge Functions in /supabase/functions do the actual money-moving
    logic server-side (see their source for why). These helpers just call them. */
 async function callEdgeFunction(name, body) {
-  if (!supabase) throw new Error('Supabase is not configured yet.');
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('You need to be signed in.');
-  const res = await fetch(`${url}/functions/v1/${name}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Something went wrong.');
-  return json;
+  if (!supabase) throw new Error('Supabase is not configured yet. Please add your Supabase credentials in .env.');
+  
+  // Prefer official Supabase SDK functions.invoke
+  try {
+    const { data, error } = await supabase.functions.invoke(name, { body });
+    if (error) {
+      let errMsg = error.message;
+      if (error.context && typeof error.context.json === 'function') {
+        try {
+          const errBody = await error.context.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch (_) {}
+      }
+      throw new Error(errMsg || `Function ${name} returned an error.`);
+    }
+    return data;
+  } catch (err) {
+    // Fallback to direct fetch if invoke encountered a network problem
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('You need to be signed in to perform this action.');
+    const res = await fetch(`${url}/functions/v1/${name}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: anonKey,
+      },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || err.message || 'Something went wrong.');
+    return json;
+  }
 }
 
 export function createRazorpayOrder(requestId) {
@@ -242,14 +264,22 @@ export function verifyRazorpayPayment(payload) {
 // verifies the result through the second Edge Function before treating
 // the request as paid/approved.
 export function openRazorpayCheckout({ order, request, onSuccess, onError }) {
-  if (!window.Razorpay) { onError?.(new Error('Payment widget failed to load. Please refresh and try again.')); return; }
+  if (!window.Razorpay) {
+    onError?.(new Error('Razorpay Checkout SDK failed to load. Please check your internet connection and reload.'));
+    return;
+  }
+  const key = order.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
+  if (!key) {
+    onError?.(new Error('Razorpay Key ID is missing. Please set RAZORPAY_KEY_ID in Supabase secrets or .env.'));
+    return;
+  }
   const rzp = new window.Razorpay({
-    key: order.keyId,
+    key,
     amount: order.amount,
-    currency: order.currency,
+    currency: order.currency || 'INR',
     order_id: order.orderId,
     name: 'WriteMyWords',
-    description: request.title,
+    description: request.title || 'Assignment Guidance',
     handler: async (response) => {
       try {
         await verifyRazorpayPayment({
@@ -263,7 +293,7 @@ export function openRazorpayCheckout({ order, request, onSuccess, onError }) {
         onError?.(err);
       }
     },
-    modal: { ondismiss: () => onError?.(new Error('Payment cancelled.')) },
+    modal: { ondismiss: () => onError?.(new Error('Payment window closed.')) },
     theme: { color: '#12142B' },
   });
   rzp.on('payment.failed', (resp) => onError?.(new Error(resp.error?.description || 'Payment failed.')));
