@@ -19,12 +19,17 @@ export default function Login() {
     setSubmitting(true);
     try {
       await login(form);
-      toast('Logged in');
+      toast('Logged in successfully!');
       navigate('/dashboard');
     } catch (err) {
-      // Deliberately generic — doesn't reveal whether the email exists,
-      // which avoids leaking account information to an attacker.
-      toast('Could not log in — check your email and password.');
+      console.error('Login error:', err);
+      if (err.message?.toLowerCase().includes('email not confirmed')) {
+        toast('Please check your email inbox to confirm your account first.');
+      } else if (err.message?.toLowerCase().includes('invalid login credentials')) {
+        toast('Invalid email or password. If you haven\'t signed up yet, click "Create an account" below.');
+      } else {
+        toast(err.message || 'Could not log in — check your email and password.');
+      }
     } finally {
       setSubmitting(false);
     }

@@ -57,20 +57,33 @@ export function AppProvider({ children }) {
   useEffect(() => { refreshBoard(); }, [refreshBoard]);
   useEffect(() => { refreshMine(); }, [refreshMine]);
 
-  const user = profile ? { ...profile, email: session?.user?.email } : null;
+  const user = session?.user
+    ? {
+        id: session.user.id,
+        email: session.user.email,
+        name: profile?.name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
+        whatsapp: profile?.whatsapp || session.user.user_metadata?.whatsapp || '',
+        role: profile?.role || session.user.user_metadata?.role || 'student',
+        ...profile,
+      }
+    : null;
 
   const signup = useCallback(async ({ name, email, whatsapp, role, password }) => {
     const data = await signUpUser({ name, email, whatsapp, role, password });
     if (!data.session) return { needsConfirmation: true };
     setSession(data.session);
-    setProfile(await getProfile(data.user.id));
+    const p = await getProfile(data.user.id);
+    if (p) setProfile(p);
     return { needsConfirmation: false };
   }, []);
 
   const login = useCallback(async ({ email, password }) => {
     const data = await signInUser({ email, password });
     setSession(data.session);
-    setProfile(await getProfile(data.user.id));
+    if (data.user) {
+      const p = await getProfile(data.user.id);
+      if (p) setProfile(p);
+    }
   }, []);
 
   const logout = useCallback(async () => {
