@@ -321,8 +321,10 @@ CREATE POLICY "Users can update own attachments"
   USING (bucket_id = 'request_attachments');
 
 -- ==============================================================================
--- ENABLE SUPABASE REALTIME
+-- ENABLE SUPABASE REALTIME & RELOAD SCHEMA CACHE
 -- ==============================================================================
+GRANT SELECT ON public.requests_public TO anon, authenticated;
+
 DO $$
 BEGIN
   BEGIN
@@ -336,3 +338,7 @@ BEGIN
     WHEN duplicate_object THEN NULL;
   END;
 END $$;
+
+-- Reload PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
