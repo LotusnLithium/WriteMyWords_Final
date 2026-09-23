@@ -87,8 +87,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Filter Tabs for Mobile & Desktop */}
-      <div className="chip-row" style={{ marginBottom: 24 }}>
+      {/* Quick Filter Tabs for Mobile View */}
+      <div className="chip-row mobile-only" style={{ marginBottom: 20 }}>
         <button className={`chip ${activeTab === 'all' ? 'selected' : ''}`} onClick={() => setActiveTab('all')}>
           All Activity ({myRequests.length})
         </button>
@@ -96,16 +96,14 @@ export default function Dashboard() {
           My Posts ({posted.length})
         </button>
         <button className={`chip ${activeTab === 'helping' ? 'selected' : ''}`} onClick={() => setActiveTab('helping')}>
-          Helping Projects ({helping.length})
+          Helping ({helping.length})
         </button>
       </div>
 
+      {/* What You Posted Section */}
       {(activeTab === 'all' || activeTab === 'posted') && (
         <div style={{ marginBottom: 36 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h2 style={{ fontSize: 19, fontWeight: 600 }}>What you posted ({posted.length})</h2>
-            <Link to="/post" className="muted" style={{ fontSize: 13, fontWeight: 600, color: 'var(--blue)' }}>+ New Request</Link>
-          </div>
+          <h3 style={{ fontSize: 19, marginBottom: 14 }}>What you posted</h3>
           {posted.length ? (
             <div className="grid grid-3">
               {posted.map((r) => (
@@ -121,9 +119,9 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="empty">
-              <h3 style={{ fontSize: 17 }}>No posted requests</h3>
-              <p className="muted" style={{ fontSize: 14, marginTop: 4, marginBottom: 14 }}>
-                Post an assignment, presentation, project or journal to get expert guidance.
+              <h3 style={{ fontSize: 18 }}>Nothing posted yet</h3>
+              <p className="muted" style={{ fontSize: 14, marginTop: 4, marginBottom: 16 }}>
+                Your next request could be the start of something useful.
               </p>
               <Link to="/post" className="btn btn-primary btn-sm">Post a Request</Link>
             </div>
@@ -131,12 +129,10 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* What You're Helping With Section */}
       {(activeTab === 'all' || activeTab === 'helping') && (
         <div style={{ marginBottom: 36 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h2 style={{ fontSize: 19, fontWeight: 600 }}>What you're helping with ({helping.length})</h2>
-            <Link to="/board" className="muted" style={{ fontSize: 13, fontWeight: 600, color: 'var(--blue)' }}>Browse Board →</Link>
-          </div>
+          <h3 style={{ fontSize: 19, marginBottom: 14 }}>What you're helping with</h3>
           {helping.length ? (
             <div className="grid grid-3">
               {helping.map((r) => (
@@ -157,11 +153,11 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="empty">
-              <h3 style={{ fontSize: 17 }}>Not helping with any requests yet</h3>
-              <p className="muted" style={{ fontSize: 14, marginTop: 4, marginBottom: 14 }}>
-                Browse the board to claim requests and earn money assisting students.
+              <h3 style={{ fontSize: 18 }}>Not helping with anything yet</h3>
+              <p className="muted" style={{ fontSize: 14, marginTop: 4, marginBottom: 16 }}>
+                Browse the board to find a request that fits your skills.
               </p>
-              <Link to="/board" className="btn btn-primary btn-sm">Browse Open Requests</Link>
+              <Link to="/board" className="btn btn-primary btn-sm">Find Requests</Link>
             </div>
           )}
         </div>
