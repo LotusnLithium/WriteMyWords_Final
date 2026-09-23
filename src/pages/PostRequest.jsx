@@ -156,7 +156,9 @@ export default function PostRequest() {
 
           {/* Document / Assignment Brief Upload Section for Work Provider */}
           <div className="field">
-            <label>Attach Assignment / Reference File (Optional)</label>
+            <label style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>📎</span> Attach Assignment Document / Brief (Optional)
+            </label>
             <div className="file-upload-box">
               <input
                 type="file"

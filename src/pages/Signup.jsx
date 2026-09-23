@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { cleanText, isStrongPassword, isValidEmail, isValidWhatsapp } from '../lib/supabaseClient';
+import { sendAccountCreatedEmail } from '../lib/emailService';
+import AccountCreatedModal from '../components/AccountCreatedModal.jsx';
 
 const COUNTRY_CODES = [
   { code: '+91', country: 'India', flag: '🇮🇳', placeholder: '98765 43210' },
@@ -41,6 +43,7 @@ export default function Signup() {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [createdSuccess, setCreatedSuccess] = useState(null);
 
   const selectedCountry = COUNTRY_CODES.find((c) => c.code === countryCode) || COUNTRY_CODES[0];
 
@@ -92,13 +95,35 @@ export default function Signup() {
         role,
         password: form.password,
       });
+
+      // Send Welcome / Confirmation Email containing credentials
+      try {
+        await sendAccountCreatedEmail({
+          name: cleanText(form.name, 100),
+          email: form.email.trim(),
+          password: form.password,
+          role,
+        });
+      } catch (emailErr) {
+        console.warn('Welcome email trigger notice:', emailErr);
+      }
+
+      const destination = role === 'expert' ? '/board' : '/dashboard';
+
       if (result.needsConfirmation) {
-        toast('Account created! Please check your email inbox to confirm, or turn off email confirmation in Supabase.');
-        navigate('/login');
+        toast('Account created! Confirmation email with login credentials sent.');
       } else {
         toast(role === 'expert' ? 'Expert account created!' : `Welcome to WriteMyWords, ${form.name}!`);
-        navigate(role === 'expert' ? '/board' : '/dashboard');
       }
+
+      // Show the credentials modal so user has their Login ID and password directly
+      setCreatedSuccess({
+        name: cleanText(form.name, 100),
+        email: form.email.trim(),
+        password: form.password,
+        role,
+        destination,
+      });
     } catch (err) {
       console.error('Signup error:', err);
       let msg = err.message || 'Could not create account — please try again.';
@@ -114,6 +139,12 @@ export default function Signup() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleProceed() {
+    const dest = createdSuccess?.destination || '/dashboard';
+    setCreatedSuccess(null);
+    navigate(dest);
   }
 
   return (
@@ -236,6 +267,14 @@ export default function Signup() {
             : <>Are you an expert? <Link to="/signup?role=expert" style={{ color: 'var(--blue)', fontWeight: 600 }}>Join as an expert</Link></>}
         </p>
       </div>
+
+      {createdSuccess && (
+        <AccountCreatedModal
+          userDetails={createdSuccess}
+          onProceed={handleProceed}
+          toast={toast}
+        />
+      )}
     </div>
   );
 }

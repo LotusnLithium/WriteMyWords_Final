@@ -333,24 +333,24 @@ export default function RequestDetail() {
                 {/* Word Document Upload Section for Helper */}
                 <div style={{ marginTop: 14 }}>
                   <label style={{ display: 'block', fontSize: 13.5, fontWeight: 600, marginBottom: 6 }}>
-                    Upload Word Document / Solution File (Optional)
+                    📘 Upload Word Document / Solution File (.docx, .doc, .pdf)
                   </label>
                   <input
                     type="file"
                     id="delivery-file-input"
                     onChange={handleDeliveryFileChange}
-                    accept=".doc,.docx,.pdf,.txt,.rtf,.zip"
+                    accept=".doc,.docx,.pdf,.txt,.rtf,.zip,.ppt,.pptx"
                     style={{ display: 'none' }}
                   />
 
                   {!deliveryFile ? (
                     <label htmlFor="delivery-file-input" className="file-upload-label" style={{ padding: '16px' }}>
-                      <div style={{ fontSize: 24, marginBottom: 4 }}>📄</div>
+                      <div style={{ fontSize: 24, marginBottom: 4 }}>📘</div>
                       <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
-                        Click to upload Document (.docx, .doc, .pdf)
+                        Click to upload Word Document (.docx, .doc, .pdf)
                       </div>
                       <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                        Attach your completed guidance document (up to 25MB)
+                        Attach your completed guidance Word document (up to 25MB)
                       </div>
                     </label>
                   ) : (
