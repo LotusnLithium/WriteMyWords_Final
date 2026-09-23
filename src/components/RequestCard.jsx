@@ -18,8 +18,14 @@ export default function RequestCard({ r }) {
           {subjects.map((s) => <span className="tag" key={s}>{s}</span>)}
         </div>
       )}
-      <div className="muted" style={{ fontSize: 13.5, marginTop: 10, lineHeight: 1.4 }}>
-        ₹{r.budget_min ?? r.budgetMin}–₹{r.budget_max ?? r.budgetMax} · Deadline: {r.deadline}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)', fontSize: 13.5 }}>
+        <span style={{ fontWeight: 600, color: 'var(--ink)' }}>
+          { (r.budget_max && r.budget_min && r.budget_max === r.budget_min) || (r.budget_max && !r.budget_min) || (!r.budget_max && r.budget_min)
+            ? `₹${r.budget_max || r.budget_min}`
+            : `₹${r.budget_min ?? r.budgetMin ?? 0}–₹${r.budget_max ?? r.budgetMax ?? 0}`
+          }
+        </span>
+        <span className="muted" style={{ fontSize: 12.5 }}>⏳ {r.deadline}</span>
       </div>
     </div>
   );

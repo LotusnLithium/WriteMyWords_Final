@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import RequestCard from '../components/RequestCard.jsx';
 
-const CATS = ['All', 'Research', 'Proofreading', 'Formatting', 'Presentation', 'Tutoring', 'Project Support', 'Journal Guidance', 'Assignment Guidance', 'Other'];
+const CATS = ['All', 'Assignment Guidance', 'Project Support', 'Presentation', 'Journal Guidance', 'Research', 'Proofreading', 'Formatting', 'Tutoring', 'Other'];
 
 export default function Board() {
   const { user, authLoading, requests, claim, toast } = useApp();

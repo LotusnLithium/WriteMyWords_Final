@@ -143,11 +143,11 @@ export default function Signup() {
 
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label>{role === 'expert' ? 'Full name' : 'First name'}</label>
+            <label>{role === 'expert' ? 'Full name' : 'Full Name'}</label>
             <input
               value={form.name}
               onChange={update('name')}
-              placeholder="e.g. Jordan"
+              placeholder="e.g. Rahul Sharma"
               autoFocus
               maxLength={100}
               required
@@ -155,13 +155,13 @@ export default function Signup() {
           </div>
 
           <div className="field">
-            <label>Email</label>
+            <label>Email Address</label>
             <input
               type="email"
               autoComplete="email"
               value={form.email}
               onChange={update('email')}
-              placeholder="you@gmail.com"
+              placeholder="name@gmail.com"
               required
             />
           </div>

@@ -20,8 +20,7 @@ export default function PostRequest() {
     academic_level: 'Undergraduate',
     description: '',
     deadline: '3 days',
-    budget_min: 500,
-    budget_max: 1000,
+    amount: 1000,
   });
 
   if (authLoading) return <div className="wrap" style={{ padding: '60px 0' }}>Loading…</div>;
@@ -53,6 +52,8 @@ export default function PostRequest() {
     e.preventDefault();
     if (submitting) return;
     if (!data.title.trim()) { toast('Please give your request a short title.'); return; }
+    const exactAmount = Math.max(0, Number(data.amount) || 0);
+    if (exactAmount <= 0) { toast('Please enter a valid payment amount (₹).'); return; }
     
     setSubmitting(true);
     setUploadStatus(file ? 'Uploading document…' : 'Posting request…');
@@ -84,8 +85,8 @@ export default function PostRequest() {
         academic_level: data.academic_level,
         description: cleanText(data.description, 2000),
         deadline: data.deadline,
-        budget_min: Math.max(0, Number(data.budget_min) || 0),
-        budget_max: Math.max(0, Number(data.budget_max) || 0),
+        budget_min: exactAmount,
+        budget_max: exactAmount,
         attachment_url: attachmentUrl,
         attachment_name: attachmentName,
       });
@@ -106,7 +107,7 @@ export default function PostRequest() {
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
         <h2 style={{ fontSize: 'clamp(22px, 4.5vw, 28px)', marginBottom: 6 }}>What do you need help with?</h2>
         <p className="muted" style={{ fontSize: 14.5, marginBottom: 22 }}>
-          Add the assignment details and document brief, then it goes live on the board.
+          Add your assignment, project, presentation or journal details, then it goes live on the board.
         </p>
 
         <form onSubmit={handleSubmit} className="card">
@@ -115,7 +116,7 @@ export default function PostRequest() {
             <input
               value={data.title}
               onChange={update('title')}
-              placeholder="e.g. Help structuring a marketing research project"
+              placeholder="e.g. Marketing Research Paper & Presentation Guidance"
               maxLength={150}
               autoFocus
               required
@@ -125,19 +126,19 @@ export default function PostRequest() {
           <div className="field">
             <label>Category</label>
             <select value={data.category} onChange={update('category')}>
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
           <div className="form-row-2">
             <div className="field" style={{ flex: 1 }}>
-              <label>Subject</label>
-              <input value={data.subject} onChange={update('subject')} placeholder="e.g. Marketing / Economics" maxLength={80} />
+              <label>Subject / Topic</label>
+              <input value={data.subject} onChange={update('subject')} placeholder="e.g. Business Administration / Data Science" maxLength={80} />
             </div>
             <div className="field" style={{ flex: 1 }}>
-              <label>Academic level</label>
+              <label>Academic Level</label>
               <select value={data.academic_level} onChange={update('academic_level')}>
-                {LEVELS.map((l) => <option key={l}>{l}</option>)}
+                {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
             </div>
           </div>
@@ -148,20 +149,20 @@ export default function PostRequest() {
               rows={4}
               value={data.description}
               onChange={update('description')}
-              placeholder="Describe what you are stuck on, specific topics, questions, or guidance needed…"
+              placeholder="Provide specific instructions, rubric details, guidelines, or topics you need help with…"
               maxLength={2000}
             />
           </div>
 
           {/* Document / Assignment Brief Upload Section for Work Provider */}
           <div className="field">
-            <label>Attach Assignment Document / Brief (Optional)</label>
+            <label>Attach Assignment / Reference File (Optional)</label>
             <div className="file-upload-box">
               <input
                 type="file"
                 id="assignment-file-input"
                 onChange={handleFileChange}
-                accept=".doc,.docx,.pdf,.txt,.rtf,.png,.jpg,.jpeg,.zip"
+                accept=".doc,.docx,.pdf,.txt,.rtf,.png,.jpg,.jpeg,.zip,.ppt,.pptx"
                 style={{ display: 'none' }}
               />
               
@@ -172,7 +173,7 @@ export default function PostRequest() {
                     Click to browse or upload assignment file
                   </div>
                   <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>
-                    Supports Word (.docx, .doc), PDF, Text (.txt), Images (up to 25MB)
+                    Supports Word (.docx, .doc), PDF, PPT, Images, ZIP (up to 25MB)
                   </div>
                 </label>
               ) : (
@@ -203,20 +204,25 @@ export default function PostRequest() {
             <div className="field" style={{ flex: 1 }}>
               <label>Deadline</label>
               <select value={data.deadline} onChange={update('deadline')}>
-                {DEADLINES.map((d) => <option key={d}>{d}</option>)}
+                {DEADLINES.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
             <div className="field" style={{ flex: 1 }}>
-              <label>Budget (₹, min–max)</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="number" min="0" placeholder="Min" value={data.budget_min} onChange={update('budget_min')} />
-                <input type="number" min="0" placeholder="Max" value={data.budget_max} onChange={update('budget_max')} />
-              </div>
+              <label>Exact Payment Amount (₹)</label>
+              <input 
+                type="number" 
+                min="100" 
+                step="50"
+                placeholder="e.g. 1000" 
+                value={data.amount} 
+                onChange={update('amount')} 
+                required
+              />
             </div>
           </div>
 
           <div className="field-hint" style={{ marginBottom: 20 }}>
-            💡 You will pay your maximum budget only after you approve the deliverable you receive.
+            💡 Exact amount to be paid after you review and approve the submitted assignment.
           </div>
 
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>

@@ -23,7 +23,7 @@ export default function Home() {
             <div style={{ fontSize: 34, marginBottom: 12 }}>📝</div>
             <h3 style={{ fontSize: 21 }}>Post your assignment</h3>
             <p className="muted" style={{ fontSize: 14.5, marginTop: 8, lineHeight: 1.55 }}>
-              Describe what you're stuck on, attach your brief, and set a budget and deadline. Pay only once you approve the work.
+              Post your assignment, project, presentation or journal brief, and set your payment amount. Pay only after you approve the work.
             </p>
           </div>
           <span className="btn btn-primary btn-block" style={{ marginTop: 22 }}>

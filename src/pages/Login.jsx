@@ -76,13 +76,13 @@ export default function Login() {
 
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label>Email</label>
+            <label>Email Address</label>
             <input
               type="email"
               autoComplete="email"
               value={form.email}
               onChange={update('email')}
-              placeholder="you@school.edu"
+              placeholder="name@gmail.com"
               autoFocus
               required
             />

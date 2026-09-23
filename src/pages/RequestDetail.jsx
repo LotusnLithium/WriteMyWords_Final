@@ -5,12 +5,14 @@ import {
   createRazorpayOrder, fetchMessages, openRazorpayCheckout, sendMessage, subscribeToMessages,
   uploadAttachment,
 } from '../lib/supabaseClient';
+import InvoiceModal from '../components/InvoiceModal.jsx';
+import { validateMessageContent } from '../lib/moderation.js';
 
 const STATUS_LABEL = {
   open: 'Open — not yet claimed',
   claimed: 'A helper is working on this',
-  delivered: 'Delivered — awaiting your approval',
-  approved: 'Approved & paid',
+  delivered: 'Delivered — awaiting student approval',
+  approved: 'Approved & Paid',
   cancelled: 'Cancelled',
 };
 
@@ -23,6 +25,7 @@ export default function RequestDetail() {
   const [deliveryFile, setDeliveryFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState('');
+  const [showInvoice, setShowInvoice] = useState(false);
   const messagesEndRef = useRef(null);
 
   const request = useMemo(
@@ -120,6 +123,13 @@ export default function RequestDetail() {
     e.preventDefault();
     const textToSend = draft.trim();
     if (!textToSend || busy) return;
+
+    // Moderation check: block harsh, abusive, or profanity language
+    const moderation = validateMessageContent(textToSend);
+    if (!moderation.isValid) {
+      toast(moderation.reason || 'Harsh, abusive, or profanity language is not allowed in messages.');
+      return;
+    }
 
     // Optimistic message append so sender sees it instantly
     const tempId = `temp-${Date.now()}`;
@@ -243,7 +253,7 @@ export default function RequestDetail() {
               <span style={{ fontSize: 24, flexShrink: 0 }}>📎</span>
               <div style={{ overflow: 'hidden', minWidth: 0 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Student Attached Document
+                  Attached Reference File
                 </div>
                 <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                   {request.attachment_name || 'Assignment Brief'}
@@ -268,7 +278,7 @@ export default function RequestDetail() {
 
         <div className="card" style={{ marginTop: 18 }}>
           <div className="muted" style={{ fontSize: 14 }}>
-            Budget: <strong style={{ color: 'var(--ink)' }}>₹{request.budget_min}–₹{request.budget_max}</strong>
+            Exact Payment Amount: <strong style={{ color: 'var(--ink)', fontSize: 16 }}>₹{request.budget_max || request.budget_min || 0}</strong>
           </div>
           <div className="muted" style={{ fontSize: 14, marginTop: 6 }}>
             Deadline: <strong style={{ color: 'var(--ink)' }}>{request.deadline}</strong>
@@ -300,7 +310,7 @@ export default function RequestDetail() {
                   <span>✍️</span> Submit your Guidance & Word Document
                 </h3>
                 <p className="muted" style={{ fontSize: 13.5, marginTop: 4 }}>
-                  Provide feedback, explanation, or upload your edited/annotated Word document (.docx/.doc).
+                  Provide feedback, explanation, or upload your completed document (.docx, .doc, .pdf).
                 </p>
 
                 <textarea
@@ -337,7 +347,7 @@ export default function RequestDetail() {
                     <label htmlFor="delivery-file-input" className="file-upload-label" style={{ padding: '16px' }}>
                       <div style={{ fontSize: 24, marginBottom: 4 }}>📄</div>
                       <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
-                        Click to upload Word Document (.docx, .doc, .pdf)
+                        Click to upload Document (.docx, .doc, .pdf)
                       </div>
                       <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
                         Attach your completed guidance document (up to 25MB)
@@ -398,7 +408,7 @@ export default function RequestDetail() {
                       <span style={{ fontSize: 26, flexShrink: 0 }}>📘</span>
                       <div style={{ overflow: 'hidden', minWidth: 0 }}>
                         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
-                          Delivered Word Document
+                          Delivered Document
                         </div>
                         <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                           {request.delivery_file_name || 'Completed Guidance Document.docx'}
@@ -413,7 +423,7 @@ export default function RequestDetail() {
                         className="btn btn-primary btn-sm"
                         download
                       >
-                        Download Word Doc
+                        Download File
                       </a>
                     )}
                   </div>
@@ -425,8 +435,16 @@ export default function RequestDetail() {
                       Review the guidance and document above. Once satisfied, click below to approve and pay the helper.
                     </p>
                     <button className="btn btn-primary btn-block" disabled={busy} onClick={handleApproveAndPay}>
-                      {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${request.budget_max}`}
+                      {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${request.budget_max || request.budget_min || 0}`}
                     </button>
+                  </div>
+                )}
+
+                {isHelper && (
+                  <div style={{ marginTop: 14, padding: '12px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    <div style={{ color: 'var(--ink-soft)', fontSize: 13, lineHeight: 1.5 }}>
+                      ⏳ <em>Note for Helper: We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.</em>
+                    </div>
                   </div>
                 )}
               </div>
@@ -446,7 +464,7 @@ export default function RequestDetail() {
                   </p>
                 )}
 
-                {/* Delivered Word Document */}
+                {/* Delivered Document */}
                 {(request.delivery_file_url || request.delivery_file_name) && (
                   <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
@@ -468,17 +486,47 @@ export default function RequestDetail() {
                         className="btn btn-primary btn-sm"
                         download
                       >
-                        Download Word Doc
+                        Download Document
                       </a>
                     )}
                   </div>
                 )}
+
+                {/* Helper 24-48h payout call notification */}
+                {isHelper && (
+                  <div style={{ marginTop: 14, padding: '14px 16px', background: '#ecfdf5', borderRadius: 10, border: '1px solid #a7f3d0' }}>
+                    <div style={{ fontWeight: 600, color: '#065f46', fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>📞</span> Helper Payment Notice
+                    </div>
+                    <div style={{ color: '#047857', fontSize: 13.5, marginTop: 4, lineHeight: 1.5 }}>
+                      <strong>We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.</strong> (Payout Amount: <strong>₹{request.budget_max || request.budget_min || 0}</strong>)
+                    </div>
+                  </div>
+                )}
+
+                {/* Tax Invoice & Receipt Action Button */}
+                <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(47, 143, 104, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                  <button 
+                    type="button" 
+                    className="btn btn-ghost" 
+                    style={{ borderColor: 'var(--success)', color: 'var(--success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    onClick={() => setShowInvoice(true)}
+                  >
+                    <span>🧾</span> View & Download Tax Invoice / Receipt
+                  </button>
+                  <span className="muted" style={{ fontSize: 12.5 }}>
+                    Available for both Student & Helper
+                  </span>
+                </div>
               </div>
             )}
 
             {/* Messages Thread */}
             <div className="card" style={{ marginTop: 22 }}>
-              <h3 style={{ fontSize: 16, marginBottom: 12 }}>Messages</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h3 style={{ fontSize: 16 }}>Messages</h3>
+                <span className="muted" style={{ fontSize: 12 }}>🛡️ Respectful communication policy enabled</span>
+              </div>
               <div style={{ maxHeight: 280, overflowY: 'auto', marginBottom: 12, paddingRight: 4 }}>
                 {messages.length ? (
                   messages.map((m) => (
@@ -509,7 +557,7 @@ export default function RequestDetail() {
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Write a message…"
+                  placeholder="Write a message (harsh/abusive words are blocked)…"
                   maxLength={2000}
                   style={{
                     flex: 1,
@@ -527,6 +575,15 @@ export default function RequestDetail() {
               </form>
             </div>
           </>
+        )}
+
+        {/* Invoice Modal for Student & Helper */}
+        {showInvoice && (
+          <InvoiceModal
+            request={request}
+            user={user}
+            onClose={() => setShowInvoice(false)}
+          />
         )}
       </div>
     </section>
