@@ -1,4 +1,5 @@
 import React from 'react';
+import { IconUser } from './Icons.jsx';
 
 export default function RequestCard({ r }) {
   const subjects = r.subjects || (r.subject ? [r.subject] : []);
@@ -7,8 +8,8 @@ export default function RequestCard({ r }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <span className="badge">{r.category}</span>
         {r.requester_name && (
-          <span style={{ fontSize: 12, color: 'rgba(18,20,43,0.65)', fontWeight: 600 }}>
-            👤 {r.requester_name}
+          <span style={{ fontSize: 12, color: 'rgba(18,20,43,0.65)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <IconUser size={13} color="rgba(18,20,43,0.5)" /> {r.requester_name}
           </span>
         )}
       </div>
@@ -25,7 +26,7 @@ export default function RequestCard({ r }) {
             : `₹${r.budget_min ?? r.budgetMin ?? 0}–₹${r.budget_max ?? r.budgetMax ?? 0}`
           }
         </span>
-        <span className="muted" style={{ fontSize: 12.5 }}>⏳ {r.deadline}</span>
+        <span className="muted" style={{ fontSize: 12.5 }}>Due in {r.deadline}</span>
       </div>
     </div>
   );

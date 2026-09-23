@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
+import { IconClose, IconDashboard, IconEdit, IconHandshake, IconHome, IconList, IconUser } from './Icons.jsx';
 
 export default function Nav() {
   const { user, logout, toast } = useApp();
@@ -42,17 +43,17 @@ export default function Nav() {
                 type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={() => setMenuOpen(false)}
-                style={{ padding: '6px 10px', fontSize: 16 }}
+                style={{ padding: '6px 10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 aria-label="Close menu"
               >
-                ✕
+                <IconClose size={16} />
               </button>
             </div>
 
             {user && (
               <div className="mobile-user-profile-badge">
-                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink)' }}>
-                  👤 {user.name || 'User'}
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <IconUser size={16} color="var(--blue)" /> {user.name || 'User'}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'rgba(18,20,43,0.6)', marginTop: 2 }}>
                   {user.email} · <span className="badge" style={{ fontSize: 11, padding: '2px 8px' }}>{user.role === 'expert' ? 'Helper / Expert' : 'Student'}</span>
@@ -62,18 +63,18 @@ export default function Nav() {
 
             <div className="mobile-menu-links">
               <Link to="/" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
-                <span>🏠</span> Home
+                <IconHome size={18} color="var(--ink-soft)" /> Home
               </Link>
               {user && (
                 <Link to="/dashboard" className="mobile-nav-link active-link-highlight" onClick={() => setMenuOpen(false)}>
-                  <span>📊</span> <strong>Dashboard & My Projects</strong>
+                  <IconDashboard size={18} color="var(--blue)" /> <strong>Dashboard & My Projects</strong>
                 </Link>
               )}
               <Link to="/board" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
-                <span>📋</span> Browse Requests
+                <IconList size={18} color="var(--ink-soft)" /> Browse Requests
               </Link>
               <Link to="/post" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
-                <span>✍️</span> Post an Assignment
+                <IconEdit size={18} color="var(--ink-soft)" /> Post an Assignment
               </Link>
             </div>
 
@@ -95,8 +96,8 @@ export default function Nav() {
                   <Link to="/signup" className="btn btn-primary btn-block" onClick={() => setMenuOpen(false)}>
                     Get Started / Sign Up
                   </Link>
-                  <Link to="/signup?role=expert" className="btn btn-ghost btn-block" onClick={() => setMenuOpen(false)} style={{ fontSize: 13.5 }}>
-                    🤝 Become a Helper / Expert
+                  <Link to="/signup?role=expert" className="btn btn-ghost btn-block" onClick={() => setMenuOpen(false)} style={{ fontSize: 13.5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <IconHandshake size={16} /> Become a Helper / Expert
                   </Link>
                 </div>
               )}
@@ -140,8 +141,8 @@ export default function Nav() {
           {/* Mobile Right Controls: Quick Dashboard Button + Hamburger */}
           <div className="mobile-only" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {user ? (
-              <Link to="/dashboard" className="btn btn-ghost btn-sm" style={{ padding: '7px 12px', fontSize: 13, fontWeight: 600 }}>
-                📊 Dashboard
+              <Link to="/dashboard" className="btn btn-ghost btn-sm" style={{ padding: '7px 12px', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <IconDashboard size={14} /> Dashboard
               </Link>
             ) : (
               <Link to="/login" className="btn btn-ghost btn-sm" style={{ padding: '7px 12px', fontSize: 13 }}>

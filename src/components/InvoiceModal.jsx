@@ -1,4 +1,5 @@
 import React from 'react';
+import { IconClose, IconPaperclip, IconPrinter } from './Icons.jsx';
 
 export default function InvoiceModal({ request, user, onClose }) {
   if (!request) return null;
@@ -19,11 +20,11 @@ export default function InvoiceModal({ request, user, onClose }) {
         <div className="invoice-actions-bar no-print">
           <div style={{ fontWeight: 600, fontSize: 16 }}>Tax Invoice & Receipt</div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary btn-sm" onClick={handlePrint}>
-              🖨️ Print / Save PDF
+            <button className="btn btn-primary btn-sm" onClick={handlePrint} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <IconPrinter size={15} color="#fff" /> Print / Save PDF
             </button>
-            <button className="btn btn-ghost btn-sm" onClick={onClose}>
-              ✕ Close
+            <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <IconClose size={14} /> Close
             </button>
           </div>
         </div>
@@ -80,8 +81,8 @@ export default function InvoiceModal({ request, user, onClose }) {
                 <td>
                   <strong>{request.title}</strong>
                   {request.delivery_file_name && (
-                    <div style={{ fontSize: 12, color: 'var(--blue)', marginTop: 4 }}>
-                      📎 Deliverable: {request.delivery_file_name}
+                    <div style={{ fontSize: 12, color: 'var(--blue)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <IconPaperclip size={13} color="var(--blue)" /> Deliverable: {request.delivery_file_name}
                     </div>
                   )}
                 </td>

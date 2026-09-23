@@ -7,6 +7,10 @@ import {
 } from '../lib/supabaseClient';
 import InvoiceModal from '../components/InvoiceModal.jsx';
 import { validateMessageContent } from '../lib/moderation.js';
+import {
+  IconCheckCircle, IconEdit, IconFileText, IconHandshake, IconPaperclip,
+  IconPhone, IconReceipt, IconShield, IconUser,
+} from '../components/Icons.jsx';
 
 const STATUS_LABEL = {
   open: 'Open — not yet claimed',
@@ -229,8 +233,8 @@ export default function RequestDetail() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <span className="badge">{request.category}</span>
           {request.requester_name && (
-            <span style={{ fontSize: 13, color: 'rgba(18,20,43,0.7)', fontWeight: 600 }}>
-              👤 Requested by: {request.requester_name}
+            <span style={{ fontSize: 13, color: 'rgba(18,20,43,0.7)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <IconUser size={14} color="var(--ink-soft)" /> Requested by: {request.requester_name}
             </span>
           )}
         </div>
@@ -250,7 +254,7 @@ export default function RequestDetail() {
         {(request.attachment_url || request.attachment_name) && (
           <div className="document-attachment-card" style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-              <span style={{ fontSize: 24, flexShrink: 0 }}>📎</span>
+              <IconPaperclip size={24} color="var(--blue)" />
               <div style={{ overflow: 'hidden', minWidth: 0 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Attached Reference File
@@ -284,8 +288,11 @@ export default function RequestDetail() {
             Deadline: <strong style={{ color: 'var(--ink)' }}>{request.deadline}</strong>
           </div>
           {request.helper_name && (
-            <div className="muted" style={{ fontSize: 14, marginTop: 6 }}>
-              Assigned Helper: <strong style={{ color: 'var(--blue)' }}>🤝 {request.helper_name}</strong>
+            <div className="muted" style={{ fontSize: 14, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>Assigned Helper:</span>
+              <strong style={{ color: 'var(--blue)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <IconHandshake size={15} /> {request.helper_name}
+              </strong>
             </div>
           )}
           {isParticipant && (
@@ -307,7 +314,7 @@ export default function RequestDetail() {
             {isHelper && request.status === 'claimed' && (
               <div className="card" style={{ marginTop: 22, border: '1.5px solid var(--blue)' }}>
                 <h3 style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>✍️</span> Submit your Guidance & Word Document
+                  <IconEdit size={18} color="var(--blue)" /> Submit your Guidance & Word Document
                 </h3>
                 <p className="muted" style={{ fontSize: 13.5, marginTop: 4 }}>
                   Provide feedback, explanation, or upload your completed document (.docx, .doc, .pdf).
@@ -332,8 +339,8 @@ export default function RequestDetail() {
 
                 {/* Word Document Upload Section for Helper */}
                 <div style={{ marginTop: 14 }}>
-                  <label style={{ display: 'block', fontSize: 13.5, fontWeight: 600, marginBottom: 6 }}>
-                    📘 Upload Word Document / Solution File (.docx, .doc, .pdf)
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 600, marginBottom: 6 }}>
+                    <IconFileText size={16} color="var(--blue)" /> Upload Word Document / Solution File (.docx, .doc, .pdf)
                   </label>
                   <input
                     type="file"
@@ -345,7 +352,9 @@ export default function RequestDetail() {
 
                   {!deliveryFile ? (
                     <label htmlFor="delivery-file-input" className="file-upload-label" style={{ padding: '16px' }}>
-                      <div style={{ fontSize: 24, marginBottom: 4 }}>📘</div>
+                      <div style={{ color: 'var(--blue)', marginBottom: 6, display: 'flex', justifyContent: 'center' }}>
+                        <IconFileText size={28} color="var(--blue)" />
+                      </div>
                       <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
                         Click to upload Word Document (.docx, .doc, .pdf)
                       </div>
@@ -356,7 +365,7 @@ export default function RequestDetail() {
                   ) : (
                     <div className="file-selected-badge">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-                        <span style={{ fontSize: 22, flexShrink: 0 }}>📘</span>
+                        <IconFileText size={22} color="var(--blue)" />
                         <div style={{ overflow: 'hidden', minWidth: 0 }}>
                           <div style={{ fontWeight: 600, fontSize: 14, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                             {deliveryFile.name}
@@ -405,7 +414,7 @@ export default function RequestDetail() {
                 {(request.delivery_file_url || request.delivery_file_name) && (
                   <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                      <span style={{ fontSize: 26, flexShrink: 0 }}>📘</span>
+                      <IconFileText size={24} color="var(--blue)" />
                       <div style={{ overflow: 'hidden', minWidth: 0 }}>
                         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
                           Delivered Document
@@ -443,7 +452,7 @@ export default function RequestDetail() {
                 {isHelper && (
                   <div style={{ marginTop: 14, padding: '12px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid var(--border)' }}>
                     <div style={{ color: 'var(--ink-soft)', fontSize: 13, lineHeight: 1.5 }}>
-                      ⏳ <em>Note for Helper: We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.</em>
+                      <em>Note for Helper: We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.</em>
                     </div>
                   </div>
                 )}
@@ -455,7 +464,9 @@ export default function RequestDetail() {
               <div className="card" style={{ marginTop: 22, background: 'rgba(47, 143, 104, 0.04)', borderColor: 'var(--success)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
                   <h3 style={{ fontSize: 17 }}>Delivered Guidance (Completed)</h3>
-                  <span className="badge badge-success">✓ Paid & Approved</span>
+                  <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <IconCheckCircle size={12} color="var(--success)" /> Paid & Approved
+                  </span>
                 </div>
 
                 {request.delivery_text && (
@@ -468,7 +479,7 @@ export default function RequestDetail() {
                 {(request.delivery_file_url || request.delivery_file_name) && (
                   <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                      <span style={{ fontSize: 26, flexShrink: 0 }}>📘</span>
+                      <IconFileText size={24} color="var(--success)" />
                       <div style={{ overflow: 'hidden', minWidth: 0 }}>
                         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--success)', textTransform: 'uppercase' }}>
                           Attached Document
@@ -496,7 +507,7 @@ export default function RequestDetail() {
                 {isHelper && (
                   <div style={{ marginTop: 14, padding: '14px 16px', background: '#ecfdf5', borderRadius: 10, border: '1px solid #a7f3d0' }}>
                     <div style={{ fontWeight: 600, color: '#065f46', fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>📞</span> Helper Payment Notice
+                      <IconPhone size={16} color="#065f46" /> Helper Payment Notice
                     </div>
                     <div style={{ color: '#047857', fontSize: 13.5, marginTop: 4, lineHeight: 1.5 }}>
                       <strong>We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.</strong> (Payout Amount: <strong>₹{request.budget_max || request.budget_min || 0}</strong>)
@@ -512,7 +523,7 @@ export default function RequestDetail() {
                     style={{ borderColor: 'var(--success)', color: 'var(--success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                     onClick={() => setShowInvoice(true)}
                   >
-                    <span>🧾</span> View & Download Tax Invoice / Receipt
+                    <IconReceipt size={16} color="var(--success)" /> View & Download Tax Invoice / Receipt
                   </button>
                   <span className="muted" style={{ fontSize: 12.5 }}>
                     Available for both Student & Helper
@@ -525,7 +536,9 @@ export default function RequestDetail() {
             <div className="card" style={{ marginTop: 22 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h3 style={{ fontSize: 16 }}>Messages</h3>
-                <span className="muted" style={{ fontSize: 12 }}>🛡️ Respectful communication policy enabled</span>
+                <span className="muted" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <IconShield size={13} color="var(--ink-soft)" /> Respectful communication policy enabled
+                </span>
               </div>
               <div style={{ maxHeight: 280, overflowY: 'auto', marginBottom: 12, paddingRight: 4 }}>
                 {messages.length ? (

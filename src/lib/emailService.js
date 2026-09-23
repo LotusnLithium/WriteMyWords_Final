@@ -15,7 +15,7 @@ export async function sendAccountCreatedEmail({ name, email, password, role }) {
   const emailPayload = {
     to_email: email,
     to_name: name || 'User',
-    subject: '🎉 Welcome to WriteMyWords - Account Created Successfully!',
+    subject: 'Welcome to WriteMyWords - Account Created Successfully',
     login_id: email,
     password: password,
     role: roleLabel,

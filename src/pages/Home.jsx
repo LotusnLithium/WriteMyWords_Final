@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
+import { IconEdit, IconHandshake } from '../components/Icons.jsx';
 
 export default function Home() {
   const { user, requests } = useApp();
@@ -18,10 +19,12 @@ export default function Home() {
       </div>
 
       <div className="grid grid-2" style={{ maxWidth: 760, margin: '0 auto' }}>
-        <Link to={getHelpHref} className="card home-choice-card" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 34, marginBottom: 12 }}>📝</div>
-            <h3 style={{ fontSize: 21 }}>Post your assignment</h3>
+        <Link to={getHelpHref} className="card home-choice-card" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '32px 24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--soft-blue)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <IconEdit size={26} color="var(--blue)" />
+            </div>
+            <h2 style={{ fontSize: 21, fontWeight: 700 }}>Post your assignment</h2>
             <p className="muted" style={{ fontSize: 14.5, marginTop: 8, lineHeight: 1.55 }}>
               Post your assignment, project, presentation or journal brief, and set your payment amount. Pay only after you approve the work.
             </p>
@@ -31,10 +34,12 @@ export default function Home() {
           </span>
         </Link>
 
-        <Link to={offerHelpHref} className="card home-choice-card" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 34, marginBottom: 12 }}>🤝</div>
-            <h3 style={{ fontSize: 21 }}>I will help</h3>
+        <Link to={offerHelpHref} className="card home-choice-card" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '32px 24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(47, 143, 104, 0.12)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <IconHandshake size={26} color="var(--success)" />
+            </div>
+            <h2 style={{ fontSize: 21, fontWeight: 700 }}>I will help</h2>
             <p className="muted" style={{ fontSize: 14.5, marginTop: 8, lineHeight: 1.55 }}>
               Browse open student requests, offer solutions and Word documents, and get paid securely upon approval.
             </p>
@@ -46,8 +51,9 @@ export default function Home() {
       </div>
 
       {requests.length > 0 && (
-        <p className="muted" style={{ textAlign: 'center', marginTop: 32, fontSize: 14 }}>
-          🟢 {requests.length} request{requests.length === 1 ? '' : 's'} open for help right now.
+        <p className="muted" style={{ textAlign: 'center', marginTop: 32, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }}></span>
+          <span><strong>{requests.length}</strong> request{requests.length === 1 ? '' : 's'} open for help right now.</span>
         </p>
       )}
     </section>

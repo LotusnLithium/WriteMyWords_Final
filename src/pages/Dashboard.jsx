@@ -4,6 +4,8 @@ import { useApp } from '../context/AppContext.jsx';
 import { supabase } from '../lib/supabaseClient';
 import RequestCard from '../components/RequestCard.jsx';
 
+import { IconCheckCircle, IconPhone } from '../components/Icons.jsx';
+
 const STATUS_MAP = {
   open: { label: 'Open', cls: '' },
   claimed: { label: 'In Progress', cls: 'badge-blue' },
@@ -58,7 +60,7 @@ export default function Dashboard() {
       {completedHelping.length > 0 && (
         <div style={{ marginBottom: 24, padding: '14px 18px', background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0' }}>
           <div style={{ fontWeight: 600, color: '#065f46', fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>📞</span> <strong>Helper Payout Notice:</strong>
+            <IconPhone size={16} color="#065f46" /> <strong>Helper Payout Notice:</strong>
           </div>
           <p style={{ color: '#047857', fontSize: 13.5, marginTop: 4, lineHeight: 1.5, marginBottom: 0 }}>
             We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.
@@ -143,8 +145,8 @@ export default function Dashboard() {
                       {STATUS_MAP[r.status]?.label || r.status}
                     </span>
                     {r.status === 'approved' && (
-                      <span style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600 }}>
-                        ✓ Call within 24-48h for payment
+                      <span style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <IconCheckCircle size={13} color="var(--success)" /> Call within 24-48h for payment
                       </span>
                     )}
                   </div>

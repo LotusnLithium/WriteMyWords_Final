@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { cleanText, uploadAttachment } from '../lib/supabaseClient';
+import { IconFileText, IconPaperclip } from '../components/Icons.jsx';
 
 const CATEGORIES = ['Assignment Guidance', 'Research', 'Proofreading', 'Formatting', 'Presentation', 'Tutoring', 'Project Support', 'Journal Guidance', 'Other'];
 const DEADLINES = ['1 day', '2 days', '3 days', '5 days', '1 week', '2 weeks'];
@@ -157,7 +158,7 @@ export default function PostRequest() {
           {/* Document / Assignment Brief Upload Section for Work Provider */}
           <div className="field">
             <label style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>📎</span> Attach Assignment Document / Brief (Optional)
+              <IconPaperclip size={16} color="var(--blue)" /> Attach Assignment Document / Brief (Optional)
             </label>
             <div className="file-upload-box">
               <input
@@ -170,7 +171,9 @@ export default function PostRequest() {
               
               {!file ? (
                 <label htmlFor="assignment-file-input" className="file-upload-label">
-                  <div style={{ fontSize: 28, marginBottom: 6 }}>📄</div>
+                  <div style={{ color: 'var(--blue)', marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
+                    <IconFileText size={32} color="var(--blue)" />
+                  </div>
                   <div style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--ink)' }}>
                     Click to browse or upload assignment file
                   </div>
@@ -181,7 +184,7 @@ export default function PostRequest() {
               ) : (
                 <div className="file-selected-badge">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', minWidth: 0, flex: 1 }}>
-                    <span style={{ fontSize: 22, flexShrink: 0 }}>📎</span>
+                    <IconPaperclip size={20} color="var(--blue)" />
                     <div style={{ overflow: 'hidden', minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 14, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         {file.name}
@@ -224,7 +227,7 @@ export default function PostRequest() {
           </div>
 
           <div className="field-hint" style={{ marginBottom: 20 }}>
-            💡 Exact amount to be paid after you review and approve the submitted assignment.
+            Exact amount to be paid after you review and approve the submitted assignment.
           </div>
 
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
