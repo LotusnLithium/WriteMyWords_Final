@@ -74,6 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_created_at ON public.requests(created_at
 -- ==============================================================================
 -- PUBLIC BOARD VIEW
 -- ==============================================================================
+DROP VIEW IF EXISTS public.requests_public CASCADE;
 CREATE OR REPLACE VIEW public.requests_public AS
 SELECT
   id,
