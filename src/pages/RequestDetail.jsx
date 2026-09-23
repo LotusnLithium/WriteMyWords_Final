@@ -285,7 +285,7 @@ export default function RequestDetail() {
             Exact Payment Amount: <strong style={{ color: 'var(--ink)', fontSize: 16 }}>₹{request.budget_max || request.budget_min || 0}</strong>
           </div>
           <div className="muted" style={{ fontSize: 14, marginTop: 6 }}>
-            Deadline: <strong style={{ color: 'var(--ink)' }}>{request.deadline}</strong>
+            📌 Deadline: <strong style={{ color: 'var(--ink)' }}>{request.deadline}</strong>
           </div>
           {request.helper_name && (
             <div className="muted" style={{ fontSize: 14, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>

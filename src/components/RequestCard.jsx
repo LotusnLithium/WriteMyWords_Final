@@ -26,7 +26,7 @@ export default function RequestCard({ r }) {
             : `₹${r.budget_min ?? r.budgetMin ?? 0}–₹${r.budget_max ?? r.budgetMax ?? 0}`
           }
         </span>
-        <span className="muted" style={{ fontSize: 12.5 }}>Due in {r.deadline}</span>
+        <span className="muted" style={{ fontSize: 12.5 }}>📌 Due in {r.deadline}</span>
       </div>
     </div>
   );
