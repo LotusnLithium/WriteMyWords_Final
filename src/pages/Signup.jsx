@@ -9,37 +9,74 @@ export default function Signup() {
   const [params] = useSearchParams();
   const role = params.get('role') === 'expert' ? 'expert' : 'student';
   const [form, setForm] = useState({ name: '', email: '', whatsapp: '', password: '' });
-  const [website, setWebsite] = useState(''); // honeypot — real users never see or fill this
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   function update(field) {
-    return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+    return (e) => {
+      setErrorMsg('');
+      setForm((f) => ({ ...f, [field]: e.target.value }));
+    };
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (submitting) return;
-    if (website) return; // silently drop likely-bot submissions
-    if (!cleanText(form.name)) { toast('Add your name to continue'); return; }
-    if (!isValidEmail(form.email)) { toast('Enter a valid email address'); return; }
-    if (!isValidWhatsapp(form.whatsapp)) { toast('Enter a valid WhatsApp number with country code'); return; }
-    if (!isStrongPassword(form.password)) { toast('Password needs 8+ characters with a letter and a number'); return; }
+    setErrorMsg('');
+
+    if (!cleanText(form.name)) {
+      const msg = 'Please enter your name.';
+      setErrorMsg(msg);
+      toast(msg);
+      return;
+    }
+    if (!isValidEmail(form.email)) {
+      const msg = 'Please enter a valid email address.';
+      setErrorMsg(msg);
+      toast(msg);
+      return;
+    }
+    if (!isValidWhatsapp(form.whatsapp)) {
+      const msg = 'Please enter a valid WhatsApp / phone number (at least 7 digits).';
+      setErrorMsg(msg);
+      toast(msg);
+      return;
+    }
+    if (!isStrongPassword(form.password)) {
+      const msg = 'Password must be at least 6 characters.';
+      setErrorMsg(msg);
+      toast(msg);
+      return;
+    }
 
     setSubmitting(true);
     try {
       const result = await signup({
-        name: cleanText(form.name, 100), email: form.email.trim(), whatsapp: form.whatsapp.trim(), role,
+        name: cleanText(form.name, 100),
+        email: form.email.trim(),
+        whatsapp: form.whatsapp.trim(),
+        role,
         password: form.password,
       });
       if (result.needsConfirmation) {
-        toast('Check your email to confirm your account, then log in.');
+        toast('Account created! Please check your email inbox to confirm, or turn off email confirmation in Supabase.');
         navigate('/login');
       } else {
-        toast(role === 'expert' ? 'Expert account created' : `You're all set, ${form.name}`);
-        navigate(role === 'expert' ? '/expert-dashboard' : '/dashboard/requests/new');
+        toast(role === 'expert' ? 'Expert account created!' : `Welcome to WriteMyWords, ${form.name}!`);
+        navigate(role === 'expert' ? '/board' : '/dashboard');
       }
     } catch (err) {
-      toast(err.message?.includes('already registered') ? 'An account with that email already exists.' : 'Something went wrong — please try again.');
+      console.error('Signup error:', err);
+      let msg = err.message || 'Could not create account — please try again.';
+      if (err.message?.toLowerCase().includes('already registered')) {
+        msg = 'An account with that email already exists. Please log in.';
+      } else if (err.message?.toLowerCase().includes('rate limit')) {
+        msg = 'Email rate limit reached. Please disable "Confirm email" in your Supabase Auth settings to test instantly.';
+      } else if (err.message?.toLowerCase().includes('email_address_invalid')) {
+        msg = 'Please enter a valid email provider (e.g. yourname@gmail.com).';
+      }
+      setErrorMsg(msg);
+      toast(msg);
     } finally {
       setSubmitting(false);
     }
@@ -54,30 +91,67 @@ export default function Signup() {
         <p className="muted" style={{ fontSize: 14, marginBottom: 22 }}>
           {role === 'expert' ? 'Set up your profile and start finding requests.' : "Just your details — you can post your first request right after."}
         </p>
-        <form onSubmit={handleSubmit}>
-          {/* Honeypot field: hidden from real users via CSS, but a naive bot
-              filling every input will fill this too, so we can drop the submission. */}
-          <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
-            <label htmlFor="website">Website</label>
-            <input id="website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+
+        {errorMsg && (
+          <div style={{
+            background: 'rgba(217, 85, 85, 0.1)',
+            border: '1px solid var(--error)',
+            color: 'var(--error)',
+            padding: '10px 14px',
+            borderRadius: 'var(--r-sm)',
+            fontSize: '13.5px',
+            marginBottom: '18px',
+            lineHeight: '1.4',
+          }}>
+            {errorMsg}
           </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
           <div className="field">
             <label>{role === 'expert' ? 'Full name' : 'First name'}</label>
-            <input value={form.name} onChange={update('name')} placeholder="Jordan" autoFocus maxLength={100} />
+            <input
+              value={form.name}
+              onChange={update('name')}
+              placeholder="e.g. Jordan"
+              autoFocus
+              maxLength={100}
+              required
+            />
           </div>
           <div className="field">
             <label>Email</label>
-            <input type="email" autoComplete="email" value={form.email} onChange={update('email')} placeholder="you@school.edu" />
+            <input
+              type="email"
+              autoComplete="email"
+              value={form.email}
+              onChange={update('email')}
+              placeholder="you@gmail.com"
+              required
+            />
           </div>
           <div className="field">
             <label>WhatsApp number</label>
-            <input type="tel" value={form.whatsapp} onChange={update('whatsapp')} placeholder="+91 98765 43210" />
+            <input
+              type="tel"
+              value={form.whatsapp}
+              onChange={update('whatsapp')}
+              placeholder="+91 98765 43210"
+              required
+            />
             <div className="field-hint">Include your country code.</div>
           </div>
           <div className="field">
             <label>Password</label>
-            <input type="password" autoComplete="new-password" value={form.password} onChange={update('password')} placeholder="At least 8 characters" />
-            <div className="field-hint">8+ characters, with at least one letter and one number.</div>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={form.password}
+              onChange={update('password')}
+              placeholder="At least 6 characters"
+              required
+            />
+            <div className="field-hint">At least 6 characters.</div>
           </div>
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
             {submitting ? 'Creating account…' : role === 'expert' ? 'Create Expert Account' : 'Get Started'}

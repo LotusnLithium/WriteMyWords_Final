@@ -29,13 +29,11 @@ export function isValidEmail(v) {
   return /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test((v || '').trim());
 }
 export function isValidWhatsapp(v) {
-  return /^\+?[0-9]{8,15}$/.test((v || '').replace(/[\s-]/g, ''));
+  const digits = (v || '').replace(/[^\d+]/g, '');
+  return /^\+?[0-9]{7,16}$/.test(digits);
 }
 export function isStrongPassword(v) {
-  // Minimum bar: 8+ chars, at least one letter and one number. Supabase Auth
-  // also enforces its own minimum server-side, so this is a fast client-side
-  // check for a better error message, not the only line of defense.
-  return typeof v === 'string' && v.length >= 8 && /[a-zA-Z]/.test(v) && /[0-9]/.test(v);
+  return typeof v === 'string' && v.length >= 6;
 }
 export function cleanText(v, maxLen = 2000) {
   return (v || '').toString().trim().slice(0, maxLen);

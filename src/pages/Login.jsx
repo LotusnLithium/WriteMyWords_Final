@@ -8,14 +8,31 @@ export default function Login() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  const update = (field) => (e) => {
+    setErrorMsg('');
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+  };
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (submitting) return; // basic throttle: no double-submits on slow taps
-    if (!isValidEmail(form.email)) { toast('Enter a valid email address'); return; }
-    if (!form.password) { toast('Enter your password'); return; }
+    if (submitting) return;
+    setErrorMsg('');
+
+    if (!isValidEmail(form.email)) {
+      const msg = 'Please enter a valid email address.';
+      setErrorMsg(msg);
+      toast(msg);
+      return;
+    }
+    if (!form.password) {
+      const msg = 'Please enter your password.';
+      setErrorMsg(msg);
+      toast(msg);
+      return;
+    }
+
     setSubmitting(true);
     try {
       await login(form);
@@ -23,13 +40,14 @@ export default function Login() {
       navigate('/dashboard');
     } catch (err) {
       console.error('Login error:', err);
+      let msg = err.message || 'Could not log in — check your email and password.';
       if (err.message?.toLowerCase().includes('email not confirmed')) {
-        toast('Please check your email inbox to confirm your account first.');
+        msg = 'Your email has not been confirmed yet. Please check your inbox or turn off "Confirm email" in Supabase settings.';
       } else if (err.message?.toLowerCase().includes('invalid login credentials')) {
-        toast('Invalid email or password. If you haven\'t signed up yet, click "Create an account" below.');
-      } else {
-        toast(err.message || 'Could not log in — check your email and password.');
+        msg = 'Invalid email or password. If you haven\'t created an account yet, click "Create an account" below.';
       }
+      setErrorMsg(msg);
+      toast(msg);
     } finally {
       setSubmitting(false);
     }
@@ -40,14 +58,45 @@ export default function Login() {
       <div className="auth-card">
         <h2 style={{ fontSize: 24, marginBottom: 6 }}>Welcome back</h2>
         <p className="muted" style={{ fontSize: 14, marginBottom: 22 }}>Log in with your email and password.</p>
+
+        {errorMsg && (
+          <div style={{
+            background: 'rgba(217, 85, 85, 0.1)',
+            border: '1px solid var(--error)',
+            color: 'var(--error)',
+            padding: '10px 14px',
+            borderRadius: 'var(--r-sm)',
+            fontSize: '13.5px',
+            marginBottom: '18px',
+            lineHeight: '1.4',
+          }}>
+            {errorMsg}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label>Email</label>
-            <input type="email" autoComplete="email" value={form.email} onChange={update('email')} placeholder="you@school.edu" autoFocus />
+            <input
+              type="email"
+              autoComplete="email"
+              value={form.email}
+              onChange={update('email')}
+              placeholder="you@school.edu"
+              autoFocus
+              required
+            />
           </div>
           <div className="field">
             <label>Password</label>
-            <input type="password" autoComplete="current-password" value={form.password} onChange={update('password')} placeholder="••••••••" />
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={form.password}
+              onChange={update('password')}
+              placeholder="••••••••"
+              required
+            />
           </div>
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
             {submitting ? 'Logging in…' : 'Log In'}
