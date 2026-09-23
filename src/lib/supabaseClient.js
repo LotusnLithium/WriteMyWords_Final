@@ -1,24 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const url = import.meta.env.VITE_SUPABASE_URL || 'https://xjdkqgzvtttlqctljhsw.supabase.co';
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_YhFw4UHVQgS5ex4kdUFrfQ_N-eyh-ZA';
 
-// If the env vars aren't set yet, supabase stays null and every call below
-// no-ops instead of throwing, so the app still runs (with nothing persisted)
-// before you've connected a real project.
+// Initializes the Supabase client using environment variables or production defaults
 export const supabase = url && anonKey
   ? createClient(url, anonKey, {
       auth: {
-        // Tokens are kept in memory + refreshed automatically; Supabase's
-        // client stores the refresh token in localStorage by default. If you
-        // need to harden this further (e.g. shared/public computers), switch
-        // to `persistSession: false` and re-authenticate each visit.
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
       },
     })
   : null;
+
 
 /* ---------------- validation ---------------- */
 // Deliberately conservative: reject anything that isn't a plausible email/
@@ -302,7 +297,7 @@ export function openRazorpayCheckout({ order, request, onSuccess, onError }) {
     onError?.(new Error('Razorpay Checkout SDK failed to load. Please check your internet connection and reload.'));
     return;
   }
-  const key = order.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID;
+  const key = order.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_TXtE3B6LLxUhCL';
   if (!key) {
     onError?.(new Error('Razorpay Key ID is missing. Please set RAZORPAY_KEY_ID in Supabase secrets or .env.'));
     return;
