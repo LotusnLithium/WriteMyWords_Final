@@ -1,3 +1,4 @@
+// @ts-nocheck
 // supabase/functions/create-razorpay-order/index.ts
 //
 // Deploy with: supabase functions deploy create-razorpay-order

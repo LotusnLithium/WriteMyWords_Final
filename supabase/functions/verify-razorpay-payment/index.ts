@@ -1,3 +1,4 @@
+// @ts-nocheck
 // supabase/functions/verify-razorpay-payment/index.ts
 //
 // Deploy with: supabase functions deploy verify-razorpay-payment
