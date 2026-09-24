@@ -10,6 +10,7 @@ export default function Footer() {
           <Link to="/board" style={{ color: 'rgba(18,20,43,0.7)' }}>Open Requests</Link>
           <Link to="/post" style={{ color: 'rgba(18,20,43,0.7)' }}>Post Request</Link>
           <Link to="/signup?role=expert" style={{ color: 'rgba(18,20,43,0.7)' }}>Become an Expert</Link>
+          <Link to="/admin" style={{ color: '#4338ca', fontWeight: 600 }}>Admin Operations Portal</Link>
         </div>
         <div style={{ fontSize: 13, color: 'rgba(18,20,43,0.5)' }}>
           © {new Date().getFullYear()} WriteMyWords. All rights reserved.

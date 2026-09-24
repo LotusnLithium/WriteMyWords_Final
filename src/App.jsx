@@ -24,6 +24,11 @@ export default function App() {
         <Route path="/request/:id" element={<RequestDetail />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/*" element={<AdminDashboard />} />
+        <Route path="/Admin" element={<AdminDashboard />} />
+        <Route path="/Admin/*" element={<AdminDashboard />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/escrow-admin" element={<AdminDashboard />} />
       </Routes>
       <Footer />
     </>
