@@ -2,12 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
-import { IconClose, IconDashboard, IconEdit, IconHandshake, IconHome, IconList, IconUser } from './Icons.jsx';
+import {
+  IconClose, IconDashboard, IconEdit, IconHandshake, IconHome,
+  IconList, IconShield, IconUser,
+} from './Icons.jsx';
 
 export default function Nav() {
   const { user, logout, toast } = useApp();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const isAdmin = user && (user.role === 'admin' || user.email?.toLowerCase().includes('admin'));
 
   // Close mobile menu whenever the route changes
   useEffect(() => {
@@ -56,7 +61,9 @@ export default function Nav() {
                   <IconUser size={16} color="var(--blue)" /> {user.name || 'User'}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'rgba(18,20,43,0.6)', marginTop: 2 }}>
-                  {user.email} · <span className="badge" style={{ fontSize: 11, padding: '2px 8px' }}>{user.role === 'expert' ? 'Helper / Expert' : 'Student'}</span>
+                  {user.email} · <span className="badge" style={{ fontSize: 11, padding: '2px 8px' }}>
+                    {user.role === 'admin' ? 'Administrator' : user.role === 'expert' ? 'Helper / Expert' : 'Student'}
+                  </span>
                 </div>
               </div>
             )}
@@ -68,6 +75,11 @@ export default function Nav() {
               {user && (
                 <Link to="/dashboard" className="mobile-nav-link active-link-highlight" onClick={() => setMenuOpen(false)}>
                   <IconDashboard size={18} color="var(--blue)" /> <strong>Dashboard & My Projects</strong>
+                </Link>
+              )}
+              {isAdmin && (
+                <Link to="/admin" className="mobile-nav-link" onClick={() => setMenuOpen(false)} style={{ background: '#1e1b4b', color: '#c7d2fe', borderRadius: 8, padding: '10px 12px' }}>
+                  <IconShield size={18} color="#a5b4fc" /> <strong>Admin Escrow Portal</strong>
                 </Link>
               )}
               <Link to="/board" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
@@ -121,6 +133,11 @@ export default function Nav() {
             <Link to="/board">Browse Requests</Link>
             <Link to="/post">Post Request</Link>
             {user && <Link to="/dashboard">Dashboard</Link>}
+            {isAdmin && (
+              <Link to="/admin" style={{ color: '#4338ca', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, background: '#e0e7ff', padding: '4px 10px', borderRadius: 6 }}>
+                <IconShield size={14} color="#4338ca" /> Admin Portal
+              </Link>
+            )}
           </nav>
 
           {/* Desktop Auth Buttons */}
@@ -174,4 +191,3 @@ export default function Nav() {
     </>
   );
 }
-

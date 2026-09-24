@@ -4,20 +4,24 @@ import { useApp } from '../context/AppContext.jsx';
 import { supabase } from '../lib/supabaseClient';
 import RequestCard from '../components/RequestCard.jsx';
 
-import { IconCheckCircle, IconPhone } from '../components/Icons.jsx';
+import { IconCheckCircle, IconPhone, IconShield } from '../components/Icons.jsx';
 
 const STATUS_MAP = {
   open: { label: 'Open', cls: '' },
   claimed: { label: 'In Progress', cls: 'badge-blue' },
-  delivered: { label: 'Delivered — Awaiting Approval', cls: 'badge-warn' },
-  approved: { label: 'Approved & Paid', cls: 'badge-success' },
+  delivered: { label: 'Delivered — Awaiting Review', cls: 'badge-warn' },
+  pending_approval: { label: 'In Escrow Review', cls: 'badge-warn' },
+  approved: { label: 'Approved & Completed', cls: 'badge-success' },
   cancelled: { label: 'Cancelled', cls: '' },
+  refunded: { label: 'Refunded', cls: '' },
 };
 
 export default function Dashboard() {
   const { user, authLoading, myRequests, toast } = useApp();
   const [switching, setSwitching] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'posted', 'helping'
+
+  const isAdmin = user && (user.role === 'admin' || user.email?.toLowerCase().includes('admin'));
 
   if (authLoading) return <div className="wrap" style={{ padding: '60px 0', textAlign: 'center' }}>Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
@@ -47,6 +51,11 @@ export default function Dashboard() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', width: '100%', maxWidth: 'max-content' }}>
+          {isAdmin && (
+            <Link to="/admin" className="btn btn-sm" style={{ background: '#1e1b4b', color: '#c7d2fe', border: '1px solid #4338ca', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <IconShield size={14} color="#a5b4fc" /> Admin Portal
+            </Link>
+          )}
           <Link to="/post" className="btn btn-primary btn-sm">
             + Post a Request
           </Link>

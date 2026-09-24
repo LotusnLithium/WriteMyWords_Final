@@ -2,10 +2,10 @@
 -- WriteMyWords Complete Database Schema & Storage Setup for Supabase
 -- ==============================================================================
 -- Run this script in your Supabase project's SQL Editor (Dashboard -> SQL Editor -> New query)
--- It creates the profiles, requests (with document attachment & Word deliverable columns),
--- messages tables, triggers, views, storage bucket, RLS policies, and enables Supabase Realtime.
+-- Includes Profiles (student, expert, admin), Requests (with Escrow, 10% platform fee & admin approval),
+-- Messages, Realtime, and Supabase Storage support.
 
--- 1. Enable UUID extension (if not already enabled)
+-- 1. Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ==============================================================================
@@ -15,15 +15,19 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   whatsapp TEXT,
-  role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'expert')),
+  role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'expert', 'admin')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
+-- If table exists, update check constraint for role
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('student', 'expert', 'admin'));
+
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
 -- ==============================================================================
--- REQUESTS TABLE (With Document Attachment & Word Solution Support)
+-- REQUESTS TABLE (With Document Attachment, Word Solution, Escrow & 10% Platform Fee)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -39,7 +43,7 @@ CREATE TABLE IF NOT EXISTS public.requests (
   deadline TEXT NOT NULL DEFAULT '3 days',
   budget_min NUMERIC NOT NULL DEFAULT 0,
   budget_max NUMERIC NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'claimed', 'delivered', 'approved', 'cancelled')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'claimed', 'delivered', 'pending_approval', 'approved', 'cancelled', 'refunded')),
   
   -- Document Attachments (Work Provider / Student initial brief)
   attachment_url TEXT,
@@ -50,22 +54,41 @@ CREATE TABLE IF NOT EXISTS public.requests (
   delivery_file_url TEXT,
   delivery_file_name TEXT,
   
-  -- Payment
+  -- Payment & Escrow details
   razorpay_order_id TEXT,
   razorpay_payment_id TEXT,
   amount_paid NUMERIC,
   paid_at TIMESTAMPTZ,
+  
+  -- Platform fee & Helper payout tracking (10% platform fee, 90% helper payout)
+  platform_fee_percent NUMERIC NOT NULL DEFAULT 10.0,
+  platform_fee_amount NUMERIC NOT NULL DEFAULT 0,
+  helper_payout_amount NUMERIC NOT NULL DEFAULT 0,
+  admin_approved_at TIMESTAMPTZ,
+  admin_approved_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  admin_notes TEXT,
+
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- If the table already exists in your database, run these ALTER statements:
+-- Ensure all columns exist for existing deployments
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS requester_name TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS helper_name TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS attachment_name TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS delivery_file_url TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS delivery_file_name TEXT;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_percent NUMERIC NOT NULL DEFAULT 10.0;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS helper_payout_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS admin_approved_at TIMESTAMPTZ;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS admin_approved_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+
+-- Update status constraint if table exists
+ALTER TABLE public.requests DROP CONSTRAINT IF EXISTS requests_status_check;
+ALTER TABLE public.requests ADD CONSTRAINT requests_status_check CHECK (status IN ('open', 'claimed', 'delivered', 'pending_approval', 'approved', 'cancelled', 'refunded'));
 
 CREATE INDEX IF NOT EXISTS idx_requests_user_id ON public.requests(user_id);
 CREATE INDEX IF NOT EXISTS idx_requests_helper_id ON public.requests(helper_id);
@@ -147,6 +170,7 @@ CREATE OR REPLACE FUNCTION public.check_request_transition()
 RETURNS TRIGGER AS $$
 DECLARE
   current_user_id UUID;
+  user_is_admin BOOLEAN;
 BEGIN
   current_user_id := auth.uid();
 
@@ -159,7 +183,22 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  SELECT (role = 'admin') INTO user_is_admin FROM public.profiles WHERE id = current_user_id;
+
+  -- Auto calculate 10% platform fee and 90% helper payout if amount_paid is present
+  IF NEW.amount_paid IS NOT NULL AND (NEW.amount_paid > 0) THEN
+    NEW.platform_fee_percent := 10.0;
+    NEW.platform_fee_amount := ROUND((NEW.amount_paid * 0.10), 2);
+    NEW.helper_payout_amount := ROUND((NEW.amount_paid * 0.90), 2);
+  END IF;
+
   IF OLD.status IS DISTINCT FROM NEW.status THEN
+    -- Admin has bypass authority for any status transition
+    IF user_is_admin = TRUE THEN
+      NEW.updated_at := timezone('utc'::text, now());
+      RETURN NEW;
+    END IF;
+
     IF OLD.status = 'open' AND NEW.status = 'claimed' THEN
       IF OLD.helper_id IS NOT NULL THEN
         RAISE EXCEPTION 'Request has already been claimed by another helper';
@@ -182,14 +221,26 @@ BEGIN
         RAISE EXCEPTION 'Please provide delivery guidance text or upload a document';
       END IF;
 
-    ELSIF OLD.status = 'delivered' AND NEW.status = 'approved' THEN
+    ELSIF (OLD.status = 'delivered' OR OLD.status = 'pending_approval') AND NEW.status = 'approved' THEN
+      -- Student or admin approved
+      IF current_user_id <> OLD.user_id AND user_is_admin IS NOT TRUE THEN
+        RAISE EXCEPTION 'Only the student poster or an admin can approve and complete this request';
+      END IF;
+
+    ELSIF OLD.status = 'delivered' AND NEW.status = 'pending_approval' THEN
+      -- Student paid and submitted for admin escrow approval
       IF current_user_id <> OLD.user_id THEN
-        RAISE EXCEPTION 'Only the student poster can approve and release payment';
+        RAISE EXCEPTION 'Only the student poster can confirm payment';
       END IF;
 
     ELSIF (OLD.status = 'open' OR OLD.status = 'claimed') AND NEW.status = 'cancelled' THEN
-      IF current_user_id <> OLD.user_id THEN
-        RAISE EXCEPTION 'Only the student poster can cancel this request';
+      IF current_user_id <> OLD.user_id AND user_is_admin IS NOT TRUE THEN
+        RAISE EXCEPTION 'Only the student poster or an admin can cancel this request';
+      END IF;
+
+    ELSIF (OLD.status = 'pending_approval' OR OLD.status = 'delivered') AND NEW.status = 'refunded' THEN
+      IF user_is_admin IS NOT TRUE THEN
+        RAISE EXCEPTION 'Only an admin can issue a refund';
       END IF;
 
     ELSE
@@ -214,6 +265,17 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
+-- Helper function to check if current user is admin
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Profiles Policies
 DROP POLICY IF EXISTS "Profiles viewable by authenticated users" ON public.profiles;
 CREATE POLICY "Profiles viewable by authenticated users"
@@ -227,12 +289,12 @@ CREATE POLICY "Users can insert their own profile"
   TO authenticated
   WITH CHECK (auth.uid() = id);
 
-DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
-CREATE POLICY "Users can update their own profile"
+DROP POLICY IF EXISTS "Users can update their own profile or admin can update any" ON public.profiles;
+CREATE POLICY "Users can update their own profile or admin can update any"
   ON public.profiles FOR UPDATE
   TO authenticated
-  USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id);
+  USING (auth.uid() = id OR public.is_admin())
+  WITH CHECK (auth.uid() = id OR public.is_admin());
 
 -- Requests Policies
 DROP POLICY IF EXISTS "Public and users can view requests" ON public.requests;
@@ -240,7 +302,7 @@ CREATE POLICY "Public and users can view requests"
   ON public.requests FOR SELECT
   USING (
     status = 'open'
-    OR (auth.uid() IS NOT NULL AND (auth.uid() = user_id OR auth.uid() = helper_id))
+    OR (auth.uid() IS NOT NULL AND (auth.uid() = user_id OR auth.uid() = helper_id OR public.is_admin()))
   );
 
 DROP POLICY IF EXISTS "Authenticated users can create requests" ON public.requests;
@@ -249,26 +311,28 @@ CREATE POLICY "Authenticated users can create requests"
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Participants can update requests" ON public.requests;
-CREATE POLICY "Participants can update requests"
+DROP POLICY IF EXISTS "Participants and admins can update requests" ON public.requests;
+CREATE POLICY "Participants and admins can update requests"
   ON public.requests FOR UPDATE
   TO authenticated
   USING (
     auth.uid() = user_id
     OR auth.uid() = helper_id
+    OR public.is_admin()
     OR (status = 'open' AND helper_id IS NULL)
   )
   WITH CHECK (
     auth.uid() = user_id
     OR auth.uid() = helper_id
+    OR public.is_admin()
     OR (status = 'claimed' AND helper_id = auth.uid())
   );
 
-DROP POLICY IF EXISTS "Owners can delete open requests" ON public.requests;
-CREATE POLICY "Owners can delete open requests"
+DROP POLICY IF EXISTS "Owners and admins can delete open requests" ON public.requests;
+CREATE POLICY "Owners and admins can delete open requests"
   ON public.requests FOR DELETE
   TO authenticated
-  USING (auth.uid() = user_id AND status = 'open');
+  USING ((auth.uid() = user_id AND status = 'open') OR public.is_admin());
 
 -- Messages Policies
 DROP POLICY IF EXISTS "Participants can read request messages" ON public.messages;
@@ -276,7 +340,8 @@ CREATE POLICY "Participants can read request messages"
   ON public.messages FOR SELECT
   TO authenticated
   USING (
-    EXISTS (
+    public.is_admin()
+    OR EXISTS (
       SELECT 1 FROM public.requests r
       WHERE r.id = messages.request_id
         AND (r.user_id = auth.uid() OR r.helper_id = auth.uid())
@@ -289,10 +354,13 @@ CREATE POLICY "Participants can send request messages"
   TO authenticated
   WITH CHECK (
     auth.uid() = sender_id
-    AND EXISTS (
-      SELECT 1 FROM public.requests r
-      WHERE r.id = messages.request_id
-        AND (r.user_id = auth.uid() OR r.helper_id = auth.uid())
+    AND (
+      public.is_admin()
+      OR EXISTS (
+        SELECT 1 FROM public.requests r
+        WHERE r.id = messages.request_id
+          AND (r.user_id = auth.uid() OR r.helper_id = auth.uid())
+      )
     )
   );
 
@@ -342,3 +410,9 @@ END $$;
 -- Reload PostgREST schema cache
 NOTIFY pgrst, 'reload schema';
 
+-- ==============================================================================
+-- TIP: TO MAKE A USER AN ADMIN RUN THIS IN SUPABASE SQL EDITOR:
+-- UPDATE public.profiles SET role = 'admin' WHERE id = 'YOUR_USER_UUID';
+-- OR:
+-- UPDATE public.profiles SET role = 'admin' WHERE id IN (SELECT id FROM auth.users WHERE email = 'your_admin_email@example.com');
+-- ==============================================================================

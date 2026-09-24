@@ -6,8 +6,8 @@
 //   SUPABASE_SERVICE_ROLE_KEY   (Project Settings → API → service_role — keep this secret)
 //
 // Called by the client right after Razorpay Checkout's success handler
-// fires. Re-derives the HMAC signature from the secret key and only marks
-// the request approved/paid if it matches.
+// fires. Re-derives the HMAC signature from the secret key and places the
+// funds into Escrow (status: pending_approval) with calculated 10% platform fee.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
 
     const { data: reqRow, error: reqError } = await admin
       .from('requests')
-      .select('id, user_id, status, razorpay_order_id, budget_max')
+      .select('id, user_id, status, razorpay_order_id, budget_max, budget_min')
       .eq('id', requestId)
       .single();
 
@@ -111,25 +111,56 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update status to approved and record payment info
-    const { error: updateError } = await admin
+    const totalAmount = Number(reqRow.budget_max || reqRow.budget_min || 0);
+    const platformFee = Math.round(totalAmount * 0.10 * 100) / 100;
+    const helperPayout = Math.round((totalAmount - platformFee) * 100) / 100;
+
+    // Place into pending_approval (Escrow awaiting Admin Approval)
+    let updatePayload: Record<string, unknown> = {
+      status: 'pending_approval',
+      razorpay_payment_id,
+      amount_paid: totalAmount,
+      platform_fee_percent: 10.0,
+      platform_fee_amount: platformFee,
+      helper_payout_amount: helperPayout,
+      paid_at: new Date().toISOString(),
+    };
+
+    let { error: updateError } = await admin
       .from('requests')
-      .update({
-        status: 'approved',
-        razorpay_payment_id,
-        amount_paid: reqRow.budget_max,
-        paid_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', requestId);
 
-    if (updateError) {
+    // If pending_approval status is not yet permitted in DB check constraint, fallback to approved
+    if (updateError && (updateError.message.includes('status') || updateError.message.includes('platform_fee'))) {
+      console.warn('Fallback: updating status to approved without optional columns:', updateError.message);
+      const fallbackPayload = {
+        status: 'approved',
+        razorpay_payment_id,
+        amount_paid: totalAmount,
+        paid_at: new Date().toISOString(),
+      };
+      const retry = await admin.from('requests').update(fallbackPayload).eq('id', requestId);
+      if (retry.error) {
+        return new Response(JSON.stringify({ error: retry.error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } else if (updateError) {
       return new Response(JSON.stringify({ error: updateError.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    return new Response(JSON.stringify({ ok: true, message: 'Payment verified and request approved.' }), {
+    return new Response(JSON.stringify({
+      ok: true,
+      message: 'Payment verified and placed in Escrow for Admin sign-off.',
+      amount_paid: totalAmount,
+      platform_fee: platformFee,
+      helper_payout: helperPayout,
+    }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

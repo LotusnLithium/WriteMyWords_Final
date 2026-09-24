@@ -16,8 +16,10 @@ const STATUS_LABEL = {
   open: 'Open — not yet claimed',
   claimed: 'A helper is working on this',
   delivered: 'Delivered — awaiting student approval',
-  approved: 'Approved & Paid',
+  pending_approval: 'Payment in Escrow — Admin Verification',
+  approved: 'Approved & Completed',
   cancelled: 'Cancelled',
+  refunded: 'Refunded',
 };
 
 export default function RequestDetail() {
@@ -456,6 +458,80 @@ export default function RequestDetail() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Pending Admin Approval (Escrow Held) */}
+            {request.status === 'pending_approval' && (
+              <div className="card" style={{ marginTop: 22, background: 'rgba(234, 179, 8, 0.05)', borderColor: '#eab308' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                  <h3 style={{ fontSize: 17 }}>Delivered Guidance</h3>
+                  <span className="badge badge-warn" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <IconShield size={12} color="#b45309" /> Payment Held in Escrow
+                  </span>
+                </div>
+
+                {request.delivery_text && (
+                  <p style={{ fontSize: 14.5, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                    {request.delivery_text}
+                  </p>
+                )}
+
+                {/* Delivered Document */}
+                {(request.delivery_file_url || request.delivery_file_name) && (
+                  <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                      <IconFileText size={24} color="var(--blue)" />
+                      <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
+                          Delivered Solution
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {request.delivery_file_name || 'Completed Guidance Document.docx'}
+                        </div>
+                      </div>
+                    </div>
+                    {request.delivery_file_url && (
+                      <a
+                        href={request.delivery_file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-primary btn-sm"
+                        download
+                      >
+                        Download File
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Status notice for Student & Helper */}
+                <div style={{ marginTop: 16, padding: '12px 14px', background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
+                  <div style={{ fontWeight: 600, color: '#92400e', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <IconShield size={15} color="#92400e" /> Escrow Verification Notice
+                  </div>
+                  <div style={{ color: '#78350f', fontSize: 13, marginTop: 4, lineHeight: 1.5 }}>
+                    {isOwner ? (
+                      <span>Payment received and held safely in Escrow. Our academic operations team is reviewing the submission for final sign-off.</span>
+                    ) : isHelper ? (
+                      <span>Student has paid! <strong>We will call you within 24 to 48 hours for your payment disbursement.</strong> (Payout Amount: <strong>₹{Number(request.helper_payout_amount || Math.round((request.budget_max || request.budget_min || 0) * 0.90)).toLocaleString('en-IN')}</strong>)</span>
+                    ) : (
+                      <span>This transaction is currently in Escrow awaiting Admin sign-off.</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tax Invoice trigger */}
+                <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setShowInvoice(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                  >
+                    <IconReceipt size={14} /> View Tax Invoice / Receipt
+                  </button>
+                </div>
               </div>
             )}
 

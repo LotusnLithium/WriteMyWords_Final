@@ -396,3 +396,134 @@ export function openRazorpayCheckout({ order, request, onSuccess, onError }) {
   rzp.open();
 }
 
+/* ---------------- admin operations ---------------- */
+
+// Fetch all platform requests across all statuses for Admin operations
+export async function fetchAdminAllRequests() {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.warn('fetchAdminAllRequests failed:', error);
+    return [];
+  }
+  return data || [];
+}
+
+// Fetch all registered user profiles for Admin management
+export async function fetchAdminAllUsers() {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.warn('fetchAdminAllUsers failed:', error);
+    return [];
+  }
+  return data || [];
+}
+
+// Admin approves an escrow transaction, marking task completed and authorizing 90% helper payout
+export async function adminApproveTransaction(requestId, adminId, notes = '') {
+  if (!supabase) throw new Error('Supabase is not configured.');
+
+  // Fetch current request data to ensure fee calculation
+  const { data: currentReq } = await supabase
+    .from('requests')
+    .select('amount_paid, budget_max, budget_min')
+    .eq('id', requestId)
+    .single();
+
+  const totalAmount = Number(currentReq?.amount_paid || currentReq?.budget_max || currentReq?.budget_min || 0);
+  const platformFee = Math.round(totalAmount * 0.10 * 100) / 100;
+  const helperPayout = Math.round((totalAmount - platformFee) * 100) / 100;
+
+  const updateData = {
+    status: 'approved',
+    amount_paid: totalAmount,
+    platform_fee_percent: 10.0,
+    platform_fee_amount: platformFee,
+    helper_payout_amount: helperPayout,
+    admin_approved_at: new Date().toISOString(),
+    admin_notes: notes || 'Approved & Settled by Admin',
+  };
+  if (adminId) updateData.admin_approved_by = adminId;
+
+  let { data, error } = await supabase
+    .from('requests')
+    .update(updateData)
+    .eq('id', requestId)
+    .select()
+    .single();
+
+  // Retry fallback without optional admin columns if schema hasn't reloaded yet
+  if (error && (error.message.includes('admin_') || error.message.includes('platform_fee') || error.message.includes('schema cache'))) {
+    console.warn('Retrying admin approval without optional columns:', error.message);
+    const retry = await supabase
+      .from('requests')
+      .update({ status: 'approved', amount_paid: totalAmount })
+      .eq('id', requestId)
+      .select()
+      .single();
+
+    if (retry.error) throw retry.error;
+    return retry.data;
+  }
+
+  if (error) throw error;
+  return data;
+}
+
+// Admin rejects or refunds a transaction
+export async function adminRefundOrRejectTransaction(requestId, adminId, { action = 'refunded', reason = '' }) {
+  if (!supabase) throw new Error('Supabase is not configured.');
+
+  const updateData = {
+    status: action === 'cancel' ? 'cancelled' : 'refunded',
+    admin_notes: reason || (action === 'cancel' ? 'Cancelled by Admin' : 'Refunded by Admin'),
+  };
+  if (adminId) updateData.admin_approved_by = adminId;
+
+  let { data, error } = await supabase
+    .from('requests')
+    .update(updateData)
+    .eq('id', requestId)
+    .select()
+    .single();
+
+  if (error && (error.message.includes('admin_') || error.message.includes('schema cache'))) {
+    const retry = await supabase
+      .from('requests')
+      .update({ status: action === 'cancel' ? 'cancelled' : 'refunded' })
+      .eq('id', requestId)
+      .select()
+      .single();
+
+    if (retry.error) throw retry.error;
+    return retry.data;
+  }
+
+  if (error) throw error;
+  return data;
+}
+
+// Admin updates a user's role
+export async function adminUpdateUserRole(userId, newRole) {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ role: newRole, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+
