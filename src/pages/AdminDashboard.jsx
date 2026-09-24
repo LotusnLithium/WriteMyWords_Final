@@ -2,15 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import {
-  adminApproveTransaction, adminRefundOrRejectTransaction, adminUpdateUserRole,
-  fetchAdminAllRequests, fetchAdminAllUsers, supabase,
+  adminApproveTransaction, adminFinalizePrice, adminRefundOrRejectTransaction, adminUpdateUserRole,
+  fetchAdminAllRequests, fetchAdminAllUsers, getBudgetLabel, supabase,
 } from '../lib/supabaseClient';
 import InvoiceModal from '../components/InvoiceModal.jsx';
 import {
   IconActivity, IconAlertOctagon, IconCheck, IconCheckCircle, IconCheckSquare,
-  IconClose, IconCopy, IconDollarSign, IconDownload, IconFileText, IconHandshake,
+  IconClose, IconCopy, IconDollarSign, IconDownload, IconEdit, IconFileText, IconHandshake,
   IconKey, IconLock, IconPaperclip, IconPhone, IconPrinter, IconReceipt, IconRefreshCw,
-  IconSearch, IconShield, IconTrendingUp, IconUser,
+  IconSearch, IconShield, IconTag, IconTrendingUp, IconUser,
 } from '../components/Icons.jsx';
 
 export default function AdminDashboard() {
@@ -44,6 +44,8 @@ export default function AdminDashboard() {
   // Action modals & states
   const [actionModal, setActionModal] = useState(null); // { type: 'approve' | 'refund', request: obj, notes: '' }
   const [actionBusy, setActionBusy] = useState(false);
+  const [priceModal, setPriceModal] = useState(null); // { request: obj, price: number }
+  const [priceBusy, setPriceBusy] = useState(false);
   const [invoiceRequest, setInvoiceRequest] = useState(null);
   const [updatingRoleUserId, setUpdatingRoleUserId] = useState(null);
 
@@ -65,10 +67,12 @@ export default function AdminDashboard() {
       amount_paid: 2500,
       budget_min: 2000,
       budget_max: 2500,
+      finalized_price: 2500,
+      price_approved: true,
       status: 'pending_approval',
-      platform_fee_percent: 10.0,
-      platform_fee_amount: 250,
-      helper_payout_amount: 2250,
+      platform_fee_percent: 20.0,
+      platform_fee_amount: 500,
+      helper_payout_amount: 2000,
       delivery_text: 'Completed 12-page comprehensive case analysis with APA citations and SWOT framework. Attached Word document deliverable.',
       delivery_file_name: 'Marketing_Case_Study_Guidance_v2.docx',
       delivery_file_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
@@ -89,11 +93,13 @@ export default function AdminDashboard() {
       helper_name: 'Pooja Nair',
       amount_paid: 1800,
       budget_min: 1500,
-      budget_max: 1800,
+      budget_max: 2000,
+      finalized_price: 1800,
+      price_approved: true,
       status: 'approved',
-      platform_fee_percent: 10.0,
-      platform_fee_amount: 180,
-      helper_payout_amount: 1620,
+      platform_fee_percent: 20.0,
+      platform_fee_amount: 360,
+      helper_payout_amount: 1440,
       delivery_text: 'Delivered fully commented Python source files and LaTeX documentation.',
       delivery_file_name: 'Algorithm_Analysis_Report.pdf',
       razorpay_payment_id: 'pay_NKu882910AA',
@@ -108,15 +114,17 @@ export default function AdminDashboard() {
       academic_level: 'Postgraduate',
       user_id: 'usr-student-12',
       requester_name: 'Sneha Reddy',
-      helper_id: 'hlp-expert-42',
-      helper_name: 'Dr. Rohan Verma',
-      amount_paid: 1200,
-      budget_min: 1000,
-      budget_max: 1200,
-      status: 'claimed',
-      platform_fee_percent: 10.0,
-      platform_fee_amount: 120,
-      helper_payout_amount: 1080,
+      helper_id: null,
+      helper_name: null,
+      amount_paid: 0,
+      budget_min: 750,
+      budget_max: 1000,
+      finalized_price: null,
+      price_approved: false,
+      status: 'open',
+      platform_fee_percent: 20.0,
+      platform_fee_amount: 0,
+      helper_payout_amount: 0,
       created_at: new Date(Date.now() - 86400000).toISOString(),
     },
   ], []);
@@ -202,7 +210,7 @@ export default function AdminDashboard() {
     }
   }
 
-  // Passcode unlock (Master pass: 'admin', '1234', 'admin123', 'wmw2025')
+  // Passcode unlock
   function handlePinUnlock(e) {
     if (e) e.preventDefault();
     const p = passcode.trim().toLowerCase();
@@ -232,21 +240,26 @@ export default function AdminDashboard() {
     }
   }
 
-  // Financial Metrics Calculation
+  // Financial Metrics Calculation (20% Platform Fee, 80% Helper Payout)
   const metrics = useMemo(() => {
     let gmv = 0;
     let platformRevenue = 0;
     let helperPayouts = 0;
     let pendingApprovalCount = 0;
     let pendingApprovalVolume = 0;
+    let pendingQuoteCount = 0;
 
     requests.forEach((r) => {
-      const amount = Number(r.amount_paid || r.budget_max || r.budget_min || 0);
+      const amount = Number(r.finalized_price || r.amount_paid || r.budget_max || r.budget_min || 0);
       
+      if (!r.price_approved && r.status === 'open') {
+        pendingQuoteCount += 1;
+      }
+
       // Approved / Completed transactions
       if (r.status === 'approved') {
         gmv += amount;
-        const fee = Number(r.platform_fee_amount || Math.round(amount * 0.10));
+        const fee = Number(r.platform_fee_amount || Math.round(amount * 0.20));
         platformRevenue += fee;
         helperPayouts += (amount - fee);
       } 
@@ -263,6 +276,7 @@ export default function AdminDashboard() {
       helperPayouts,
       pendingApprovalCount,
       pendingApprovalVolume,
+      pendingQuoteCount,
       totalRequests: requests.length,
       totalUsers: usersList.length,
     };
@@ -275,6 +289,11 @@ export default function AdminDashboard() {
       (r.status === 'delivered' && r.delivery_text) ||
       (r.amount_paid > 0 && r.status !== 'approved' && r.status !== 'cancelled' && r.status !== 'refunded')
     );
+  }, [requests]);
+
+  // Pending Quote Queue (Requests needing Admin price finalization from budget ranges)
+  const pendingQuotes = useMemo(() => {
+    return requests.filter((r) => (!r.price_approved || !r.finalized_price) && r.status === 'open');
   }, [requests]);
 
   // Filtered Ledger
@@ -313,7 +332,7 @@ export default function AdminDashboard() {
 
           <h2 style={{ fontSize: 24, fontWeight: 800 }}>WriteMyWords Admin Central</h2>
           <p className="muted" style={{ fontSize: 14.5, marginTop: 6, marginBottom: 22 }}>
-            Secure operations portal for Escrow Approvals, 10% Platform Revenue tracking, and Helper Disbursements.
+            Secure operations portal for Escrow Approvals, Quote Finalization, 20% Platform Revenue tracking, and Helper Disbursements.
           </p>
 
           {/* Quick Option 1: 1-Click Master Unlock */}
@@ -414,7 +433,7 @@ export default function AdminDashboard() {
     );
   }
 
-  // Handle Admin Approving a Transaction & Releasing Payout
+  // Handle Admin Approving a Transaction & Releasing 80% Payout
   async function handleConfirmApprove() {
     if (!actionModal?.request || actionBusy) return;
     setActionBusy(true);
@@ -422,7 +441,7 @@ export default function AdminDashboard() {
 
     try {
       await adminApproveTransaction(req.id, user?.id || 'admin-session', actionModal.notes);
-      toast(`Transaction for "${req.title.slice(0, 30)}…" approved! 90% payout authorized.`);
+      toast(`Transaction for "${req.title.slice(0, 30)}…" approved! 80% payout authorized.`);
       setActionModal(null);
       await loadAdminData();
     } catch (err) {
@@ -455,6 +474,29 @@ export default function AdminDashboard() {
     }
   }
 
+  // Handle Admin Finalizing Price for Budget Range
+  async function handleConfirmPriceFinalize(e) {
+    if (e) e.preventDefault();
+    if (!priceModal?.request || priceBusy) return;
+    const priceNum = Number(priceModal.price);
+    if (!priceNum || priceNum <= 0) {
+      toast('Please enter a valid price amount.');
+      return;
+    }
+    setPriceBusy(true);
+    try {
+      await adminFinalizePrice(priceModal.request.id, priceNum);
+      toast(`Final price of ₹${priceNum} approved and published!`);
+      setPriceModal(null);
+      await loadAdminData();
+    } catch (err) {
+      console.error('Price finalization failed:', err);
+      toast(err.message || 'Could not finalize price.');
+    } finally {
+      setPriceBusy(false);
+    }
+  }
+
   // Handle User Role Change
   async function handleRoleChange(userId, nextRole) {
     setUpdatingRoleUserId(userId);
@@ -467,6 +509,14 @@ export default function AdminDashboard() {
     } finally {
       setUpdatingRoleUserId(null);
     }
+  }
+
+  function openPriceModal(req) {
+    const defaultPrice = req.finalized_price || req.budget_max || req.budget_min || 500;
+    setPriceModal({
+      request: req,
+      price: defaultPrice,
+    });
   }
 
   return (
@@ -518,7 +568,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Financial KPIs Cards */}
+      {/* Financial KPIs Cards (20% Platform Fee, 80% Helper Payout) */}
       <div className="metric-row" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 32 }}>
         <div className="metric" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)', border: '1.5px solid var(--border-strong)' }}>
           <div className="num" style={{ color: 'var(--ink)', fontSize: 'clamp(22px, 4vw, 28px)' }}>₹{metrics.gmv.toLocaleString('en-IN')}</div>
@@ -530,23 +580,23 @@ export default function AdminDashboard() {
         <div className="metric" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', border: '1.5px solid #bfdbfe' }}>
           <div className="num" style={{ color: 'var(--blue)', fontSize: 'clamp(22px, 4vw, 28px)' }}>₹{metrics.platformRevenue.toLocaleString('en-IN')}</div>
           <div className="lbl" style={{ color: '#1e40af', fontWeight: 600 }}>
-            Platform Revenue (10% Fee)
+            Platform Revenue (20% Fee)
           </div>
         </div>
 
         <div className="metric" style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', border: '1.5px solid #a7f3d0' }}>
           <div className="num" style={{ color: 'var(--success)', fontSize: 'clamp(22px, 4vw, 28px)' }}>₹{metrics.helperPayouts.toLocaleString('en-IN')}</div>
           <div className="lbl" style={{ color: '#065f46', fontWeight: 600 }}>
-            Helper Payouts (90% Net)
+            Helper Payouts (80% Net)
           </div>
         </div>
 
-        <div className="metric" style={{ background: metrics.pendingApprovalCount > 0 ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)' : '#fff', border: metrics.pendingApprovalCount > 0 ? '1.5px solid #fde68a' : '1px solid var(--border)' }}>
-          <div className="num" style={{ color: metrics.pendingApprovalCount > 0 ? '#b45309' : 'var(--ink)' }}>
-            {metrics.pendingApprovalCount}
+        <div className="metric" style={{ background: metrics.pendingQuoteCount > 0 ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)' : '#fff', border: metrics.pendingQuoteCount > 0 ? '1.5px solid #fde68a' : '1px solid var(--border)' }}>
+          <div className="num" style={{ color: metrics.pendingQuoteCount > 0 ? '#b45309' : 'var(--ink)' }}>
+            {metrics.pendingQuoteCount}
           </div>
-          <div className="lbl" style={{ color: metrics.pendingApprovalCount > 0 ? '#92400e' : 'var(--ink-soft)' }}>
-            Escrow Approvals Queue (₹{metrics.pendingApprovalVolume.toLocaleString('en-IN')})
+          <div className="lbl" style={{ color: metrics.pendingQuoteCount > 0 ? '#92400e' : 'var(--ink-soft)' }}>
+            Price Approval Queue
           </div>
         </div>
 
@@ -563,10 +613,10 @@ export default function AdminDashboard() {
           onClick={() => setActiveTab('approvals')}
           style={{ fontSize: 14, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          <IconCheckSquare size={16} /> Escrow Approvals
-          {metrics.pendingApprovalCount > 0 && (
+          <IconCheckSquare size={16} /> Escrow & Quote Approvals
+          {(metrics.pendingApprovalCount > 0 || metrics.pendingQuoteCount > 0) && (
             <span style={{ background: '#b45309', color: '#fff', borderRadius: 99, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>
-              {metrics.pendingApprovalCount}
+              {metrics.pendingApprovalCount + metrics.pendingQuoteCount}
             </span>
           )}
         </button>
@@ -588,156 +638,211 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* TAB 1: ESCROW APPROVALS QUEUE */}
+      {/* TAB 1: ESCROW & PRICE QUOTE APPROVALS QUEUE */}
       {activeTab === 'approvals' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          {/* SECTION 1: PRICE QUOTE FINALIZATION FOR NEW STUDENT REQUESTS */}
+          {pendingQuotes.length > 0 && (
             <div>
-              <h2 style={{ fontSize: 20 }}>Escrow Approvals & Release Queue</h2>
-              <p className="muted" style={{ fontSize: 13.5, marginTop: 2 }}>
-                Review submitted deliverables and approve transactions to authorize the 90% payout to helpers.
-              </p>
-            </div>
-          </div>
-
-          {pendingApprovals.length === 0 ? (
-            <div className="empty" style={{ padding: '48px 20px', background: '#f8fafc' }}>
-              <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(47, 143, 104, 0.1)', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                <IconCheckCircle size={26} color="var(--success)" />
+              <div style={{ marginBottom: 14 }}>
+                <h2 style={{ fontSize: 19, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <IconTag size={18} color="#b45309" /> Price Quotes Awaiting Admin Finalization ({pendingQuotes.length})
+                </h2>
+                <p className="muted" style={{ fontSize: 13.5, marginTop: 2 }}>
+                  Students selected budget ranges. Review assignment brief & set the exact price (Expert will automatically see 80% payout upon approval).
+                </p>
               </div>
-              <h3>All Escrow Clear!</h3>
-              <p className="muted" style={{ marginTop: 4, fontSize: 14 }}>
-                There are currently no tasks awaiting admin approval.
-              </p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {pendingApprovals.map((req) => {
-                const totalAmt = Number(req.amount_paid || req.budget_max || req.budget_min || 0);
-                const platformFee = Number(req.platform_fee_amount || Math.round(totalAmt * 0.10));
-                const helperPayout = Number(req.helper_payout_amount || (totalAmt - platformFee));
 
-                return (
-                  <div key={req.id} className="card" style={{ border: '1.5px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {pendingQuotes.map((req) => (
+                  <div key={req.id} className="card" style={{ border: '1.5px solid #fde68a', background: '#fffbeb' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span className="badge">{req.category}</span>
-                          <span className="badge badge-warn">
-                            {req.status === 'pending_approval' ? 'Payment in Escrow' : req.status === 'delivered' ? 'Delivered Guidance' : req.status}
-                          </span>
-                          <span className="muted" style={{ fontSize: 12 }}>
-                            Task ID: <code>{req.id.slice(0, 8)}</code>
-                          </span>
+                          <span className="badge badge-warn">Price Pending Approval</span>
+                          <span className="muted" style={{ fontSize: 12 }}>ID: <code>{req.id.slice(0, 8)}</code></span>
                         </div>
-                        <h3 style={{ fontSize: 18, marginTop: 8 }}>{req.title}</h3>
-                        <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
-                          Topic: <strong>{req.subject || 'General'}</strong> · Level: <strong>{req.academic_level}</strong>
-                        </div>
-                      </div>
-
-                      {/* Financial Breakdown Card */}
-                      <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', minWidth: 240, textAlign: 'right' }}>
-                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Gross Student Payment:</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>₹{totalAmt.toLocaleString('en-IN')}</div>
-                        <div style={{ fontSize: 11.5, color: 'var(--blue)', marginTop: 2 }}>
-                          Platform Fee (10%): <strong>₹{platformFee.toLocaleString('en-IN')}</strong>
-                        </div>
-                        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--success)', marginTop: 2 }}>
-                          Helper Payout (90%): ₹{helperPayout.toLocaleString('en-IN')}
+                        <h3 style={{ fontSize: 17, marginTop: 8 }}>{req.title}</h3>
+                        <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginTop: 4, lineHeight: 1.4 }}>
+                          {req.description || 'No description provided.'}
+                        </p>
+                        <div style={{ fontSize: 13, color: 'var(--ink)', marginTop: 6 }}>
+                          Student: <strong>{req.requester_name || 'Student'}</strong> · Level: <strong>{req.academic_level}</strong> · Due: <strong>{req.deadline}</strong>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Parties Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Student (Requester)</div>
-                        <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>{req.requester_name || 'Student'}</div>
-                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>User ID: {req.user_id.slice(0, 8)}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Helper (Expert)</div>
-                        <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>{req.helper_name || 'Assigned Expert'}</div>
-                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Helper ID: {req.helper_id ? req.helper_id.slice(0, 8) : 'Not assigned'}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Payment Gateway Reference</div>
-                        <div style={{ fontSize: 12.5, marginTop: 2 }}>
-                          Payment ID: <code>{req.razorpay_payment_id || 'Pending / Recorded'}</code>
+                      <div style={{ background: '#fff', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', minWidth: 200, textAlign: 'right' }}>
+                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Student Budget Range:</div>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>
+                          {getBudgetLabel(req.budget_min, req.budget_max)}
                         </div>
-                        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                          Order ID: <code>{req.razorpay_order_id || 'N/A'}</code>
-                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          style={{ marginTop: 10, width: '100%', background: '#b45309', borderColor: '#b45309', fontSize: 12.5 }}
+                          onClick={() => openPriceModal(req)}
+                        >
+                          <IconTag size={14} color="#fff" /> Set & Approve Price
+                        </button>
                       </div>
-                    </div>
-
-                    {/* Deliverables & Brief Preview */}
-                    <div style={{ marginTop: 16, padding: '12px 14px', background: '#f1f5f9', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {req.delivery_text && (
-                        <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
-                          <strong>Helper Deliverable Guidance:</strong> {req.delivery_text}
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                        {req.delivery_file_url && (
-                          <a
-                            href={req.delivery_file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-primary btn-sm"
-                            download
-                            style={{ fontSize: 12.5, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                          >
-                            <IconFileText size={14} /> Download Delivered Solution ({req.delivery_file_name || 'Word Document'})
-                          </a>
-                        )}
-
-                        {req.attachment_url && (
-                          <a
-                            href={req.attachment_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-ghost btn-sm"
-                            download
-                            style={{ fontSize: 12.5, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                          >
-                            <IconPaperclip size={14} /> View Student Brief ({req.attachment_name || 'File'})
-                          </a>
-                        )}
-
-                        <Link to={`/request/${req.id}`} target="_blank" className="btn btn-ghost btn-sm" style={{ fontSize: 12.5, padding: '6px 12px' }}>
-                          Open Chat & Full Details ↗
-                        </Link>
-                      </div>
-                    </div>
-
-                    {/* Admin Actions Bar */}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: 'var(--error)', borderColor: 'rgba(217,85,85,0.3)' }}
-                        onClick={() => setActionModal({ type: 'refund', request: req, notes: '' })}
-                      >
-                        Refund / Reject
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        style={{ background: 'var(--success)', borderColor: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                        onClick={() => setActionModal({ type: 'approve', request: req, notes: '' })}
-                      >
-                        <IconCheckCircle size={15} color="#fff" /> Approve Transaction & Release ₹{helperPayout.toLocaleString('en-IN')} Payout
-                      </button>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           )}
+
+          {/* SECTION 2: ESCROW DELIVERABLE & PAYOUT APPROVALS */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontSize: 20 }}>Escrow Approvals & Payout Release Queue</h2>
+                <p className="muted" style={{ fontSize: 13.5, marginTop: 2 }}>
+                  Review submitted deliverables and approve transactions to authorize the 80% payout to helpers (20% platform fee).
+                </p>
+              </div>
+            </div>
+
+            {pendingApprovals.length === 0 ? (
+              <div className="empty" style={{ padding: '48px 20px', background: '#f8fafc' }}>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(47, 143, 104, 0.1)', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <IconCheckCircle size={26} color="var(--success)" />
+                </div>
+                <h3>All Escrow Clear!</h3>
+                <p className="muted" style={{ marginTop: 4, fontSize: 14 }}>
+                  There are currently no delivered tasks awaiting escrow sign-off.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {pendingApprovals.map((req) => {
+                  const totalAmt = Number(req.finalized_price || req.amount_paid || req.budget_max || req.budget_min || 0);
+                  const platformFee = Number(req.platform_fee_amount || Math.round(totalAmt * 0.20));
+                  const helperPayout = Number(req.helper_payout_amount || (totalAmt - platformFee));
+
+                  return (
+                    <div key={req.id} className="card" style={{ border: '1.5px solid #cbd5e1', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span className="badge">{req.category}</span>
+                            <span className="badge badge-warn">
+                              {req.status === 'pending_approval' ? 'Payment in Escrow' : req.status === 'delivered' ? 'Delivered Guidance' : req.status}
+                            </span>
+                            <span className="muted" style={{ fontSize: 12 }}>
+                              Task ID: <code>{req.id.slice(0, 8)}</code>
+                            </span>
+                          </div>
+                          <h3 style={{ fontSize: 18, marginTop: 8 }}>{req.title}</h3>
+                          <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
+                            Topic: <strong>{req.subject || 'General'}</strong> · Level: <strong>{req.academic_level}</strong>
+                          </div>
+                        </div>
+
+                        {/* Financial Breakdown Card */}
+                        <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', minWidth: 240, textAlign: 'right' }}>
+                          <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Gross Student Payment:</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>₹{totalAmt.toLocaleString('en-IN')}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--blue)', marginTop: 2 }}>
+                            Platform Fee (20%): <strong>₹{platformFee.toLocaleString('en-IN')}</strong>
+                          </div>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--success)', marginTop: 2 }}>
+                            Helper Payout (80%): ₹{helperPayout.toLocaleString('en-IN')}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Parties Grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Student (Requester)</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>{req.requester_name || 'Student'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>User ID: {req.user_id.slice(0, 8)}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Helper (Expert)</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>{req.helper_name || 'Assigned Expert'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Helper ID: {req.helper_id ? req.helper_id.slice(0, 8) : 'Not assigned'}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)' }}>Payment Gateway Reference</div>
+                          <div style={{ fontSize: 12.5, marginTop: 2 }}>
+                            Payment ID: <code>{req.razorpay_payment_id || 'Pending / Recorded'}</code>
+                          </div>
+                          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                            Order ID: <code>{req.razorpay_order_id || 'N/A'}</code>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Deliverables & Brief Preview */}
+                      <div style={{ marginTop: 16, padding: '12px 14px', background: '#f1f5f9', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {req.delivery_text && (
+                          <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+                            <strong>Helper Deliverable Guidance:</strong> {req.delivery_text}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {req.delivery_file_url && (
+                            <a
+                              href={req.delivery_file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-primary btn-sm"
+                              download
+                              style={{ fontSize: 12.5, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                            >
+                              <IconFileText size={14} /> Download Delivered Solution ({req.delivery_file_name || 'Word Document'})
+                            </a>
+                          )}
+
+                          {req.attachment_url && (
+                            <a
+                              href={req.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-ghost btn-sm"
+                              download
+                              style={{ fontSize: 12.5, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                            >
+                              <IconPaperclip size={14} /> View Student Brief ({req.attachment_name || 'File'})
+                            </a>
+                          )}
+
+                          <Link to={`/request/${req.id}`} target="_blank" className="btn btn-ghost btn-sm" style={{ fontSize: 12.5, padding: '6px 12px' }}>
+                            Open Chat & Full Details ↗
+                          </Link>
+                        </div>
+                      </div>
+
+                      {/* Admin Actions Bar */}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: 'var(--error)', borderColor: 'rgba(217,85,85,0.3)' }}
+                          onClick={() => setActionModal({ type: 'refund', request: req, notes: '' })}
+                        >
+                          Refund / Reject
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          style={{ background: 'var(--success)', borderColor: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          onClick={() => setActionModal({ type: 'approve', request: req, notes: '' })}
+                        >
+                          <IconCheckCircle size={15} color="#fff" /> Approve Transaction & Release ₹{helperPayout.toLocaleString('en-IN')} Payout (80%)
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -748,7 +853,7 @@ export default function AdminDashboard() {
             <div>
               <h2 style={{ fontSize: 20 }}>All Transactions & Operations Ledger</h2>
               <p className="muted" style={{ fontSize: 13.5, marginTop: 2 }}>
-                Full system audit of payments, platform fees, and task deliverables.
+                Full system audit of payments, 20% platform fees, and 80% helper payouts.
               </p>
             </div>
 
@@ -785,25 +890,26 @@ export default function AdminDashboard() {
           </div>
 
           <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 'var(--r-md)', border: '1px solid var(--border)' }}>
-            <table className="invoice-table" style={{ width: '100%', minWidth: 840 }}>
+            <table className="invoice-table" style={{ width: '100%', minWidth: 860 }}>
               <thead>
                 <tr>
                   <th>Date & Task</th>
                   <th>Student</th>
                   <th>Helper</th>
-                  <th>Gross Paid</th>
-                  <th>10% Fee</th>
-                  <th>90% Payout</th>
+                  <th>Price / Budget</th>
+                  <th>20% Fee</th>
+                  <th>80% Payout</th>
                   <th>Status</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLedger.length ? filteredLedger.map((r) => {
-                  const gross = Number(r.amount_paid || r.budget_max || r.budget_min || 0);
-                  const fee = Number(r.platform_fee_amount || Math.round(gross * 0.10));
+                  const gross = Number(r.finalized_price || r.amount_paid || r.budget_max || r.budget_min || 0);
+                  const fee = Number(r.platform_fee_amount || Math.round(gross * 0.20));
                   const payout = Number(r.helper_payout_amount || (gross - fee));
                   const dateStr = new Date(r.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                  const isApprovedPrice = r.price_approved || (r.finalized_price && Number(r.finalized_price) > 0);
 
                   return (
                     <tr key={r.id}>
@@ -815,7 +921,15 @@ export default function AdminDashboard() {
                       </td>
                       <td style={{ fontSize: 13 }}>{r.requester_name || 'Student'}</td>
                       <td style={{ fontSize: 13 }}>{r.helper_name || '—'}</td>
-                      <td style={{ fontWeight: 600, fontSize: 13.5 }}>₹{gross.toLocaleString('en-IN')}</td>
+                      <td style={{ fontWeight: 600, fontSize: 13.5 }}>
+                        {isApprovedPrice ? (
+                          <span>₹{gross.toLocaleString('en-IN')}</span>
+                        ) : (
+                          <span style={{ color: '#b45309', fontSize: 12 }}>
+                            {getBudgetLabel(r.budget_min, r.budget_max)}
+                          </span>
+                        )}
+                      </td>
                       <td style={{ color: 'var(--blue)', fontSize: 13 }}>₹{fee.toLocaleString('en-IN')}</td>
                       <td style={{ color: 'var(--success)', fontWeight: 600, fontSize: 13 }}>₹{payout.toLocaleString('en-IN')}</td>
                       <td>
@@ -825,6 +939,17 @@ export default function AdminDashboard() {
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', gap: 6 }}>
+                          {!isApprovedPrice && (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => openPriceModal(r)}
+                              style={{ padding: '3px 8px', fontSize: 11.5, background: '#b45309', borderColor: '#b45309' }}
+                              title="Set & Approve Price"
+                            >
+                              Quote
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm"
@@ -925,6 +1050,89 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* PRICE QUOTE FINALIZATION MODAL */}
+      {priceModal && (
+        <div className="invoice-overlay" style={{ zIndex: 99999 }}>
+          <div className="auth-card" style={{ maxWidth: 520, width: '100%', margin: 'auto', background: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ fontSize: 19, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <IconTag size={18} color="var(--blue)" /> Finalise Price & Approve Quote
+              </h3>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setPriceModal(null)}
+                style={{ padding: '4px 8px' }}
+              >
+                <IconClose size={16} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+              Assignment: <strong>{priceModal.request.title}</strong>
+            </p>
+
+            <div style={{ background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', margin: '12px 0', fontSize: 13.5 }}>
+              <div>Student Selected Budget Range: <strong>{getBudgetLabel(priceModal.request.budget_min, priceModal.request.budget_max)}</strong></div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 2 }}>
+                Requester: {priceModal.request.requester_name || 'Student'} · Level: {priceModal.request.academic_level}
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmPriceFinalize}>
+              <div className="field">
+                <label style={{ fontSize: 13, fontWeight: 700 }}>Finalised Total Price for Student (INR ₹)</label>
+                <input
+                  type="number"
+                  value={priceModal.price}
+                  onChange={(e) => setPriceModal({ ...priceModal, price: e.target.value })}
+                  min="1"
+                  required
+                  style={{ fontSize: 16, fontWeight: 700 }}
+                />
+              </div>
+
+              {/* Live 80/20 calculation preview */}
+              <div style={{ background: '#ecfdf5', border: '1.5px solid #a7f3d0', borderRadius: 8, padding: '12px 14px', margin: '14px 0' }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', marginBottom: 6 }}>
+                  Payout & Revenue Breakdown (80% / 20%)
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '2px 0' }}>
+                  <span>Student Pays:</span>
+                  <strong>₹{Number(priceModal.price || 0).toLocaleString('en-IN')}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '2px 0', color: 'var(--blue)' }}>
+                  <span>Platform Fee (20%):</span>
+                  <strong>₹{Math.round(Number(priceModal.price || 0) * 0.20).toLocaleString('en-IN')}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '4px 0', borderTop: '1px solid #a7f3d0', marginTop: 4, color: 'var(--success)' }}>
+                  <span><strong>Expert Net Payout (80%):</strong></span>
+                  <strong style={{ fontSize: 15 }}>₹{Math.round(Number(priceModal.price || 0) * 0.80).toLocaleString('en-IN')}</strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-block"
+                  onClick={() => setPriceModal(null)}
+                  disabled={priceBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-block"
+                  disabled={priceBusy}
+                >
+                  {priceBusy ? 'Publishing…' : 'Approve & Publish Quote'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ACTION CONFIRMATION MODAL (Approve Payout / Refund) */}
       {actionModal && (
         <div className="invoice-overlay" style={{ zIndex: 99999 }}>
@@ -950,19 +1158,19 @@ export default function AdminDashboard() {
             {actionModal.type === 'approve' ? (
               <div style={{ background: '#f8fafc', border: '1.5px solid #a7f3d0', borderRadius: 8, padding: '14px', margin: '14px 0' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', marginBottom: 8 }}>
-                  Financial Settlement Breakdown
+                  Financial Settlement Breakdown (80% Net Payout)
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '3px 0' }}>
                   <span>Gross Student Payment:</span>
-                  <strong>₹{Number(actionModal.request.amount_paid || actionModal.request.budget_max || 0).toLocaleString('en-IN')}</strong>
+                  <strong>₹{Number(actionModal.request.finalized_price || actionModal.request.amount_paid || actionModal.request.budget_max || 0).toLocaleString('en-IN')}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '3px 0', color: 'var(--blue)' }}>
-                  <span>Platform Commission (10%):</span>
-                  <strong>+₹{Math.round(Number(actionModal.request.amount_paid || actionModal.request.budget_max || 0) * 0.10).toLocaleString('en-IN')}</strong>
+                  <span>Platform Commission (20%):</span>
+                  <strong>+₹{Math.round(Number(actionModal.request.finalized_price || actionModal.request.amount_paid || actionModal.request.budget_max || 0) * 0.20).toLocaleString('en-IN')}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '6px 0', borderTop: '1px solid #cbd5e1', marginTop: 6, color: 'var(--success)' }}>
-                  <span>Net Payout to Helper (90%):</span>
-                  <strong style={{ fontSize: 16 }}>₹{Math.round(Number(actionModal.request.amount_paid || actionModal.request.budget_max || 0) * 0.90).toLocaleString('en-IN')}</strong>
+                  <span>Net Payout to Helper (80%):</span>
+                  <strong style={{ fontSize: 16 }}>₹{Math.round(Number(actionModal.request.finalized_price || actionModal.request.amount_paid || actionModal.request.budget_max || 0) * 0.80).toLocaleString('en-IN')}</strong>
                 </div>
               </div>
             ) : (
@@ -998,7 +1206,7 @@ export default function AdminDashboard() {
                 onClick={actionModal.type === 'approve' ? handleConfirmApprove : handleConfirmRefund}
                 disabled={actionBusy}
               >
-                {actionBusy ? 'Processing…' : actionModal.type === 'approve' ? 'Confirm & Authorize Payout' : 'Confirm Refund'}
+                {actionBusy ? 'Processing…' : actionModal.type === 'approve' ? 'Confirm & Authorize 80% Payout' : 'Confirm Refund'}
               </button>
             </div>
           </div>
@@ -1035,16 +1243,14 @@ export default function AdminDashboard() {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', background: '#0f172a', color: '#e2e8f0', padding: 14, borderRadius: 8, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5 }}>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{`-- Run this in Supabase SQL Editor to enable all Admin roles, 10% platform fee, and escrow:
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{`-- Run this in Supabase SQL Editor to enable all Admin roles, 20% platform fee, 80% payout, and quote approvals:
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('student', 'expert', 'admin'));
 
--- Make any specific user an admin:
--- UPDATE public.profiles SET role = 'admin' WHERE id = 'YOUR_USER_UUID';
--- UPDATE public.profiles SET role = 'admin' WHERE id IN (SELECT id FROM auth.users WHERE email = 'YOUR_EMAIL');
-
--- Add platform fee columns to requests
-ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_percent NUMERIC NOT NULL DEFAULT 10.0;
+-- Add quote finalization & 20% platform fee columns to requests
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS finalized_price NUMERIC;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS price_approved BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_percent NUMERIC NOT NULL DEFAULT 20.0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS helper_payout_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS admin_approved_at TIMESTAMPTZ;
@@ -1075,7 +1281,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;`}</pre>
                   navigator.clipboard.writeText(`ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('student', 'expert', 'admin'));
 
-ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_percent NUMERIC NOT NULL DEFAULT 10.0;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS finalized_price NUMERIC;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS price_approved BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_percent NUMERIC NOT NULL DEFAULT 20.0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS helper_payout_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS admin_approved_at TIMESTAMPTZ;

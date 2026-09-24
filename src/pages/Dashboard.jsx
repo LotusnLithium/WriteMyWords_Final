@@ -8,7 +8,7 @@ import { IconCheckCircle, IconPhone, IconShield } from '../components/Icons.jsx'
 
 const STATUS_MAP = {
   open: { label: 'Open', cls: '' },
-  claimed: { label: 'In Progress', cls: 'badge-blue' },
+  claimed: { label: 'Assignment Accepted · Work in Progress', cls: 'badge-blue' },
   delivered: { label: 'Delivered — Awaiting Review', cls: 'badge-warn' },
   pending_approval: { label: 'In Escrow Review', cls: 'badge-warn' },
   approved: { label: 'Approved & Completed', cls: 'badge-success' },
@@ -92,9 +92,9 @@ export default function Dashboard() {
         </div>
         <div className="metric">
           <div className="num">
-            ₹{myRequests.filter((r) => r.status === 'approved' && r.helper_id === user.id).reduce((s, r) => s + Number(r.amount_paid || r.budget_max || r.budget_min || 0), 0)}
+            ₹{myRequests.filter((r) => r.status === 'approved' && r.helper_id === user.id).reduce((s, r) => s + Math.round(Number(r.finalized_price || r.amount_paid || r.budget_max || r.budget_min || 0) * 0.80), 0).toLocaleString('en-IN')}
           </div>
-          <div className="lbl">Earned (₹)</div>
+          <div className="lbl">Earned (₹ 80% Net)</div>
         </div>
       </div>
 

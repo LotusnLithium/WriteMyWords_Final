@@ -1,20 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import {
-  createRazorpayOrder, fetchMessages, openRazorpayCheckout, sendMessage, subscribeToMessages,
+  BUDGET_RANGES, createRazorpayOrder, fetchMessages, getBudgetLabel,
+  openRazorpayCheckout, sendMessage, subscribeToMessages,
   uploadAttachment,
 } from '../lib/supabaseClient';
 import InvoiceModal from '../components/InvoiceModal.jsx';
 import { validateMessageContent } from '../lib/moderation.js';
 import {
-  IconCheckCircle, IconEdit, IconFileText, IconHandshake, IconPaperclip,
-  IconPhone, IconReceipt, IconShield, IconUser,
+  IconCheckCircle, IconClose, IconEdit, IconFileText, IconHandshake, IconPaperclip,
+  IconPhone, IconReceipt, IconShield, IconTrash, IconUser,
 } from '../components/Icons.jsx';
 
 const STATUS_LABEL = {
-  open: 'Open — not yet claimed',
-  claimed: 'A helper is working on this',
+  open: 'Open — awaiting helper',
+  claimed: 'Assignment Accepted · Work in Progress',
   delivered: 'Delivered — awaiting student approval',
   pending_approval: 'Payment in Escrow — Admin Verification',
   approved: 'Approved & Completed',
@@ -24,7 +25,9 @@ const STATUS_LABEL = {
 
 export default function RequestDetail() {
   const { id } = useParams();
-  const { user, authLoading, myRequests, requests, claim, deliver, refreshMine, toast } = useApp();
+  const navigate = useNavigate();
+  const { user, authLoading, myRequests, requests, claim, deliver, editRequest, cancelMyRequest, refreshMine, toast } = useApp();
+  
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [deliveryDraft, setDeliveryDraft] = useState('');
@@ -32,13 +35,56 @@ export default function RequestDetail() {
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState('');
   const [showInvoice, setShowInvoice] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  
+  // Edit Form State
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    category: 'Assignments',
+    subject: '',
+    academic_level: 'Undergraduate',
+    deadline: '3 days',
+    budget_min: 500,
+    budget_max: 750,
+    selectedRangeIndex: 4,
+    isCustomBudget: false,
+  });
+
   const messagesEndRef = useRef(null);
 
   const request = useMemo(
     () => myRequests.find((r) => r.id === id) || requests.find((r) => r.id === id),
     [myRequests, requests, id],
   );
-  const isParticipant = request && (request.user_id === user?.id || request.helper_id === user?.id);
+
+  const isOwner = user && request && request.user_id === user.id;
+  const isHelper = user && request && request.helper_id === user.id;
+  const isAdmin = user && (user.role === 'admin' || user.email?.toLowerCase().includes('admin'));
+  const isParticipant = isOwner || isHelper || isAdmin;
+
+  // Initialize edit form when opening edit modal
+  useEffect(() => {
+    if (request && showEditModal) {
+      const min = request.budget_min ?? 500;
+      const max = request.budget_max ?? 750;
+      const rangeIdx = BUDGET_RANGES.findIndex((r) => r.min === min && r.max === max);
+      
+      setEditForm({
+        title: request.title || '',
+        description: request.description || '',
+        category: request.category || 'Assignments',
+        subject: request.subject || '',
+        academic_level: request.academic_level || 'Undergraduate',
+        deadline: request.deadline || '3 days',
+        budget_min: min,
+        budget_max: max,
+        selectedRangeIndex: rangeIdx >= 0 ? rangeIdx : -1,
+        isCustomBudget: rangeIdx === -1,
+      });
+    }
+  }, [request, showEditModal]);
 
   // Auto-scroll chat to latest message
   useEffect(() => {
@@ -64,7 +110,6 @@ export default function RequestDetail() {
     });
 
     // 3. Fallback polling heartbeat (every 2.5s) to guarantee messages appear instantly
-    // even if mobile network temporarily pauses WebSockets
     const pollInterval = setInterval(async () => {
       try {
         const latest = await fetchMessages(id);
@@ -87,12 +132,13 @@ export default function RequestDetail() {
     };
   }, [id, isParticipant]);
 
-  if (authLoading) return <div className="wrap" style={{ padding: '60px 0' }}>Loading…</div>;
+  if (authLoading) return <div className="wrap" style={{ padding: '60px 0', textAlign: 'center' }}>Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (!request) return <div className="wrap" style={{ padding: '60px 0' }}><div className="empty"><h3>Request not found.</h3></div></div>;
 
-  const isOwner = request.user_id === user.id;
-  const isHelper = request.helper_id === user.id;
+  const isApprovedPrice = request.price_approved || (request.finalized_price && Number(request.finalized_price) > 0);
+  const finalizedAmt = Number(request.finalized_price || request.amount_paid || 0);
+  const expertPayoutAmt = Number(request.helper_payout_amount || Math.round(finalizedAmt * 0.80));
 
   function formatBytes(bytes) {
     if (!bytes) return '';
@@ -117,11 +163,53 @@ export default function RequestDetail() {
     setBusy(true);
     try {
       await claim(id);
-      toast('Claimed — say hello in messages below!');
+      toast('Assignment claimed! You can now collaborate with the student.');
     } catch (err) {
       toast(err.message || 'Could not claim this request.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleCancelRequest() {
+    if (!window.confirm('Are you sure you want to cancel and remove this request?')) return;
+    setBusy(true);
+    try {
+      await cancelMyRequest(id);
+      toast('Request cancelled and removed.');
+      navigate('/dashboard');
+    } catch (err) {
+      toast(err.message || 'Could not cancel request.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault();
+    if (!editForm.title.trim()) {
+      toast('Please enter a valid title.');
+      return;
+    }
+    setEditBusy(true);
+    try {
+      await editRequest(id, {
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        category: editForm.category,
+        subject: editForm.subject.trim(),
+        academic_level: editForm.academic_level,
+        deadline: editForm.deadline,
+        budget_min: Number(editForm.budget_min) || 0,
+        budget_max: Number(editForm.budget_max) || 0,
+      });
+      toast('Request details updated successfully!');
+      setShowEditModal(false);
+      await refreshMine();
+    } catch (err) {
+      toast(err.message || 'Could not update request.');
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -157,7 +245,6 @@ export default function RequestDetail() {
     } catch (err) {
       console.error('Send message error:', err);
       toast('Message could not be sent. Please check your connection.');
-      // Remove failed optimistic message
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setDraft(textToSend);
     }
@@ -231,9 +318,18 @@ export default function RequestDetail() {
 
   return (
     <section className="wrap" style={{ paddingTop: 'clamp(20px, 4vw, 40px)', paddingBottom: 'clamp(32px, 5vw, 60px)' }}>
-      <div style={{ maxWidth: 680, margin: '0 auto' }}>
+      <div style={{ maxWidth: 680, margin: '0 auto', overflowX: 'hidden' }}>
+        
+        {/* Top Badges & Requester Info */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-          <span className="badge">{request.category}</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="badge">{request.category}</span>
+            {request.status === 'claimed' && (
+              <span className="badge" style={{ background: '#dbeafe', color: '#1e40af', border: '1px solid #bfdbfe', fontWeight: 600 }}>
+                Assignment Accepted · Work in Progress
+              </span>
+            )}
+          </div>
           {request.requester_name && (
             <span style={{ fontSize: 13, color: 'rgba(18,20,43,0.7)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <IconUser size={14} color="var(--ink-soft)" /> Requested by: {request.requester_name}
@@ -241,28 +337,32 @@ export default function RequestDetail() {
           )}
         </div>
 
-        <h1 style={{ fontSize: 'clamp(22px, 5vw, 28px)', marginTop: 12 }}>{request.title}</h1>
+        {/* Title */}
+        <h1 style={{ fontSize: 'clamp(22px, 5vw, 28px)', marginTop: 12, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+          {request.title}
+        </h1>
         
         <div className="tag-row" style={{ marginTop: 10 }}>
           <span className="tag">{request.subject || 'General'}</span>
           <span className="tag">{request.academic_level}</span>
         </div>
 
-        <p className="muted" style={{ marginTop: 14, fontSize: 15, lineHeight: 1.6, wordBreak: 'break-word' }}>
+        {/* Description */}
+        <p className="muted" style={{ marginTop: 14, fontSize: 15, lineHeight: 1.6, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
           {request.description || 'No description added.'}
         </p>
 
         {/* Work Provider's Attached Document */}
         {(request.attachment_url || request.attachment_name) && (
           <div className="document-attachment-card" style={{ marginTop: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-              <IconPaperclip size={24} color="var(--blue)" />
-              <div style={{ overflow: 'hidden', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1, maxWidth: '100%' }}>
+              <IconPaperclip size={24} color="var(--blue)" style={{ flexShrink: 0 }} />
+              <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Attached Reference File
+                  Student Attached Document
                 </div>
-                <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                  {request.attachment_name || 'Assignment Brief'}
+                <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2, wordBreak: 'break-all', overflowWrap: 'anywhere', lineHeight: 1.3 }}>
+                  {request.attachment_name || 'Assignment Brief File'}
                 </div>
               </div>
             </div>
@@ -273,44 +373,123 @@ export default function RequestDetail() {
                 rel="noopener noreferrer"
                 className="btn btn-ghost btn-sm"
                 download
+                style={{ flexShrink: 0 }}
               >
                 Download / View
               </a>
             ) : (
-              <span className="badge" style={{ fontSize: 11 }}>Attached</span>
+              <span className="badge" style={{ fontSize: 11, flexShrink: 0 }}>Attached</span>
             )}
           </div>
         )}
 
+        {/* Price & Budget Overview Card */}
         <div className="card" style={{ marginTop: 18 }}>
-          <div className="muted" style={{ fontSize: 14 }}>
-            Exact Payment Amount: <strong style={{ color: 'var(--ink)', fontSize: 16 }}>₹{request.budget_max || request.budget_min || 0}</strong>
+          {/* Price & Budget Display (Student vs Expert vs Admin Approval) */}
+          <div style={{ paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+            {isApprovedPrice ? (
+              <div>
+                {isHelper ? (
+                  <div>
+                    <div className="muted" style={{ fontSize: 13, textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+                      Expert Calculated Payout (80%)
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--success)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      ₹{expertPayoutAmt.toLocaleString('en-IN')}
+                      <span className="badge badge-success" style={{ fontSize: 12, fontWeight: 600 }}>
+                        <IconCheckCircle size={13} color="var(--success)" /> Approved by Admin
+                      </span>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                      Based on finalised price of ₹{finalizedAmt.toLocaleString('en-IN')} (20% platform processing fee deducted).
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="muted" style={{ fontSize: 13, textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+                      Finalised Assignment Price
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      ₹{finalizedAmt.toLocaleString('en-IN')}
+                      <span className="badge badge-success" style={{ fontSize: 12, fontWeight: 600 }}>
+                        <IconCheckCircle size={13} color="var(--success)" /> Approved Quote
+                      </span>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                      Admin verified quote based on your required work and selected budget range.
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div className="muted" style={{ fontSize: 13, textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>
+                  Student Selected Budget Range
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)', marginTop: 2 }}>
+                  {getBudgetLabel(request.budget_min, request.budget_max)}
+                </div>
+                <div style={{ fontSize: 12.5, color: '#b45309', fontWeight: 600, marginTop: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <IconShield size={14} color="#b45309" />
+                  {isOwner 
+                    ? 'Our team is reviewing your requirements to finalise the exact price within your budget.' 
+                    : 'Price yet to be approved by admin. Helper payout (80%) will be displayed upon approval.'
+                  }
+                </div>
+              </div>
+            )}
           </div>
-          <div className="muted" style={{ fontSize: 14, marginTop: 6 }}>
-            📌 Deadline: <strong style={{ color: 'var(--ink)' }}>{request.deadline}</strong>
-          </div>
-          {request.helper_name && (
-            <div className="muted" style={{ fontSize: 14, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>Assigned Helper:</span>
-              <strong style={{ color: 'var(--blue)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <IconHandshake size={15} /> {request.helper_name}
-              </strong>
+
+          <div style={{ paddingTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+            <div className="muted" style={{ fontSize: 13.5 }}>
+              📌 Deadline: <strong style={{ color: 'var(--ink)' }}>{request.deadline}</strong>
             </div>
-          )}
-          {isParticipant && (
-            <div className="muted" style={{ fontSize: 14, marginTop: 6 }}>
+            {request.helper_name && (
+              <div className="muted" style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span>Expert:</span>
+                <strong style={{ color: 'var(--blue)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <IconHandshake size={14} /> {request.helper_name}
+                </strong>
+              </div>
+            )}
+            <div className="muted" style={{ fontSize: 13.5 }}>
               Status: <strong style={{ color: 'var(--ink)' }}>{STATUS_LABEL[request.status] || request.status}</strong>
             </div>
-          )}
+          </div>
         </div>
 
-        {!isParticipant && (
+        {/* Requester Actions for Open Request: Edit Request & Cancel Request */}
+        {isOwner && request.status === 'open' && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setShowEditModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <IconEdit size={15} color="var(--blue)" /> Edit Request
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={handleCancelRequest}
+              disabled={busy}
+              style={{ color: 'var(--error)', borderColor: 'rgba(217,85,85,0.3)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <IconTrash size={15} color="var(--error)" /> Cancel Request
+            </button>
+          </div>
+        )}
+
+        {/* Claim / Help With This Button for other verified Experts */}
+        {!isParticipant && request.status === 'open' && (
           <button className="btn btn-primary btn-block" style={{ marginTop: 20 }} disabled={busy} onClick={handleClaim}>
             {busy ? 'Claiming…' : 'Help With This'}
           </button>
         )}
 
-        {isParticipant && (
+        {/* Participant-Only Workspace & Collaboration Area */}
+        {isParticipant ? (
           <>
             {/* Helper Submission Form (when claimed) */}
             {isHelper && request.status === 'claimed' && (
@@ -331,7 +510,7 @@ export default function RequestDetail() {
                     borderRadius: 10,
                     border: '1px solid var(--border-strong)',
                     fontFamily: 'inherit',
-                    fontSize: 16,
+                    fontSize: 15,
                   }}
                   value={deliveryDraft}
                   onChange={(e) => setDeliveryDraft(e.target.value)}
@@ -367,9 +546,9 @@ export default function RequestDetail() {
                   ) : (
                     <div className="file-selected-badge">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-                        <IconFileText size={22} color="var(--blue)" />
-                        <div style={{ overflow: 'hidden', minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 14, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        <IconFileText size={22} color="var(--blue)" style={{ flexShrink: 0 }} />
+                        <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13.5, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
                             {deliveryFile.name}
                           </div>
                           <div className="muted" style={{ fontSize: 12 }}>{formatBytes(deliveryFile.size)}</div>
@@ -415,13 +594,13 @@ export default function RequestDetail() {
                 {/* Delivered Word Document */}
                 {(request.delivery_file_url || request.delivery_file_name) && (
                   <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                      <IconFileText size={24} color="var(--blue)" />
-                      <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1, maxWidth: '100%' }}>
+                      <IconFileText size={24} color="var(--blue)" style={{ flexShrink: 0 }} />
+                      <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
                           Delivered Document
                         </div>
-                        <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
                           {request.delivery_file_name || 'Completed Guidance Document.docx'}
                         </div>
                       </div>
@@ -433,6 +612,7 @@ export default function RequestDetail() {
                         rel="noopener noreferrer"
                         className="btn btn-primary btn-sm"
                         download
+                        style={{ flexShrink: 0 }}
                       >
                         Download File
                       </a>
@@ -446,7 +626,7 @@ export default function RequestDetail() {
                       Review the guidance and document above. Once satisfied, click below to approve and pay the helper.
                     </p>
                     <button className="btn btn-primary btn-block" disabled={busy} onClick={handleApproveAndPay}>
-                      {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${request.budget_max || request.budget_min || 0}`}
+                      {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${finalizedAmt || request.budget_max || request.budget_min || 0}`}
                     </button>
                   </div>
                 )}
@@ -454,7 +634,7 @@ export default function RequestDetail() {
                 {isHelper && (
                   <div style={{ marginTop: 14, padding: '12px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid var(--border)' }}>
                     <div style={{ color: 'var(--ink-soft)', fontSize: 13, lineHeight: 1.5 }}>
-                      <em>Note for Helper: We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.</em>
+                      <em>Note for Helper: We will call you within 24 to 48 hours, after approval of your submitted assignment for payment. (Payout: ₹{expertPayoutAmt})</em>
                     </div>
                   </div>
                 )}
@@ -480,13 +660,13 @@ export default function RequestDetail() {
                 {/* Delivered Document */}
                 {(request.delivery_file_url || request.delivery_file_name) && (
                   <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                      <IconFileText size={24} color="var(--blue)" />
-                      <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1, maxWidth: '100%' }}>
+                      <IconFileText size={24} color="var(--blue)" style={{ flexShrink: 0 }} />
+                      <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
                           Delivered Solution
                         </div>
-                        <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
                           {request.delivery_file_name || 'Completed Guidance Document.docx'}
                         </div>
                       </div>
@@ -498,6 +678,7 @@ export default function RequestDetail() {
                         rel="noopener noreferrer"
                         className="btn btn-primary btn-sm"
                         download
+                        style={{ flexShrink: 0 }}
                       >
                         Download File
                       </a>
@@ -514,7 +695,7 @@ export default function RequestDetail() {
                     {isOwner ? (
                       <span>Payment received and held safely in Escrow. Our academic operations team is reviewing the submission for final sign-off.</span>
                     ) : isHelper ? (
-                      <span>Student has paid! <strong>We will call you within 24 to 48 hours for your payment disbursement.</strong> (Payout Amount: <strong>₹{Number(request.helper_payout_amount || Math.round((request.budget_max || request.budget_min || 0) * 0.90)).toLocaleString('en-IN')}</strong>)</span>
+                      <span>Student has paid! <strong>We will call you within 24 to 48 hours for your payment disbursement.</strong> (80% Payout Amount: <strong>₹{expertPayoutAmt.toLocaleString('en-IN')}</strong>)</span>
                     ) : (
                       <span>This transaction is currently in Escrow awaiting Admin sign-off.</span>
                     )}
@@ -554,13 +735,13 @@ export default function RequestDetail() {
                 {/* Delivered Document */}
                 {(request.delivery_file_url || request.delivery_file_name) && (
                   <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                      <IconFileText size={24} color="var(--success)" />
-                      <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1, maxWidth: '100%' }}>
+                      <IconFileText size={24} color="var(--success)" style={{ flexShrink: 0 }} />
+                      <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--success)', textTransform: 'uppercase' }}>
                           Attached Document
                         </div>
-                        <div style={{ fontWeight: 600, fontSize: 14.5, marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
                           {request.delivery_file_name || 'Completed Guidance Document.docx'}
                         </div>
                       </div>
@@ -572,6 +753,7 @@ export default function RequestDetail() {
                         rel="noopener noreferrer"
                         className="btn btn-primary btn-sm"
                         download
+                        style={{ flexShrink: 0 }}
                       >
                         Download Document
                       </a>
@@ -586,7 +768,7 @@ export default function RequestDetail() {
                       <IconPhone size={16} color="#065f46" /> Helper Payment Notice
                     </div>
                     <div style={{ color: '#047857', fontSize: 13.5, marginTop: 4, lineHeight: 1.5 }}>
-                      <strong>We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.</strong> (Payout Amount: <strong>₹{request.budget_max || request.budget_min || 0}</strong>)
+                      <strong>We will call you within 24 to 48 hours, after approval of your submitted assignment for payment.</strong> (80% Net Payout: <strong>₹{expertPayoutAmt.toLocaleString('en-IN')}</strong>)
                     </div>
                   </div>
                 )}
@@ -608,7 +790,7 @@ export default function RequestDetail() {
               </div>
             )}
 
-            {/* Messages Thread */}
+            {/* Private Messages Thread (Protected: Only Student, Helper, and Admin) */}
             <div className="card" style={{ marginTop: 22 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h3 style={{ fontSize: 16 }}>Messages</h3>
@@ -631,6 +813,7 @@ export default function RequestDetail() {
                         background: m.sender_id === user.id ? 'var(--ink)' : 'var(--soft-blue)',
                         color: m.sender_id === user.id ? '#fff' : 'var(--ink)',
                         wordBreak: 'break-word',
+                        overflowWrap: 'anywhere',
                         lineHeight: 1.45,
                       }}
                     >
@@ -654,7 +837,7 @@ export default function RequestDetail() {
                     borderRadius: 10,
                     border: '1px solid var(--border-strong)',
                     fontFamily: 'inherit',
-                    fontSize: 16,
+                    fontSize: 15,
                     minWidth: 0,
                   }}
                 />
@@ -664,6 +847,14 @@ export default function RequestDetail() {
               </form>
             </div>
           </>
+        ) : (
+          /* Privacy notice for non-participant viewers */
+          <div className="card" style={{ marginTop: 22, background: '#f8fafc', textAlign: 'center', padding: '24px 18px' }}>
+            <div style={{ color: 'var(--ink-soft)', fontSize: 13.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <IconShield size={16} color="var(--ink-soft)" />
+              Private chat & delivery workspace is securely restricted to the student and assigned helper.
+            </div>
+          </div>
         )}
 
         {/* Invoice Modal for Student & Helper */}
@@ -674,6 +865,139 @@ export default function RequestDetail() {
             onClose={() => setShowInvoice(false)}
           />
         )}
+
+        {/* Edit Request Modal for Requester */}
+        {showEditModal && (
+          <div className="invoice-overlay" onClick={() => setShowEditModal(false)}>
+            <div className="invoice-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+              <div className="invoice-actions-bar">
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Edit Request Details</div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowEditModal(false)}>
+                  <IconClose size={14} /> Close
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEdit} style={{ padding: '20px 24px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="field">
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>Title</label>
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="field">
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>Subject / Topic</label>
+                  <input
+                    type="text"
+                    value={editForm.subject}
+                    onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+                    placeholder="e.g. Data Analytics, Marketing, Economics"
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="field">
+                    <label style={{ fontSize: 13, fontWeight: 600 }}>Academic Level</label>
+                    <select
+                      value={editForm.academic_level}
+                      onChange={(e) => setEditForm({ ...editForm, academic_level: e.target.value })}
+                    >
+                      <option value="High School">High School</option>
+                      <option value="Undergraduate">Undergraduate</option>
+                      <option value="Postgraduate">Postgraduate</option>
+                      <option value="Doctorate">Doctorate / PhD</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label style={{ fontSize: 13, fontWeight: 600 }}>Deadline</label>
+                    <select
+                      value={editForm.deadline}
+                      onChange={(e) => setEditForm({ ...editForm, deadline: e.target.value })}
+                    >
+                      <option value="24 hours">24 hours (Urgent)</option>
+                      <option value="2 days">2 days</option>
+                      <option value="3 days">3 days</option>
+                      <option value="5 days">5 days</option>
+                      <option value="1 week">1 week</option>
+                      <option value="2 weeks">2 weeks</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>Budget Range (INR)</label>
+                  <div className="chip-row" style={{ marginTop: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+                    {BUDGET_RANGES.map((r, i) => (
+                      <button
+                        type="button"
+                        key={r.label}
+                        className={`chip ${editForm.selectedRangeIndex === i && !editForm.isCustomBudget ? 'selected' : ''}`}
+                        onClick={() => {
+                          setEditForm({
+                            ...editForm,
+                            budget_min: r.min,
+                            budget_max: r.max,
+                            selectedRangeIndex: i,
+                            isCustomBudget: false,
+                          });
+                        }}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className={`chip ${editForm.isCustomBudget ? 'selected' : ''}`}
+                      onClick={() => setEditForm({ ...editForm, isCustomBudget: true, selectedRangeIndex: -1 })}
+                    >
+                      Custom
+                    </button>
+                  </div>
+
+                  {editForm.isCustomBudget && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <input
+                        type="number"
+                        placeholder="Min (₹)"
+                        value={editForm.budget_min}
+                        onChange={(e) => setEditForm({ ...editForm, budget_min: Number(e.target.value) })}
+                      />
+                      <input
+                        type="number"
+                        placeholder="Max (₹)"
+                        value={editForm.budget_max}
+                        onChange={(e) => setEditForm({ ...editForm, budget_max: Number(e.target.value) })}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="field">
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>Description / Notes</label>
+                  <textarea
+                    rows={3}
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    placeholder="Describe your requirements in detail…"
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowEditModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={editBusy}>
+                    {editBusy ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
       </div>
     </section>
   );

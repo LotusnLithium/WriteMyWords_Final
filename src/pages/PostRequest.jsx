@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
-import { cleanText, uploadAttachment } from '../lib/supabaseClient';
+import { BUDGET_RANGES, cleanText, uploadAttachment } from '../lib/supabaseClient';
 import { IconFileText, IconPaperclip } from '../components/Icons.jsx';
 
 const CATEGORIES = ['Assignment Guidance', 'Research', 'Proofreading', 'Formatting', 'Presentation', 'Tutoring', 'Project Support', 'Journal Guidance', 'Other'];
@@ -14,6 +14,12 @@ export default function PostRequest() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [file, setFile] = useState(null);
+  
+  // Selected budget range index or 'custom'
+  const [selectedRangeIdx, setSelectedRangeIdx] = useState(5); // Default: '₹750 – ₹1,000'
+  const [customMin, setCustomMin] = useState(750);
+  const [customMax, setCustomMax] = useState(1000);
+
   const [data, setData] = useState({
     title: '',
     category: 'Assignment Guidance',
@@ -21,7 +27,6 @@ export default function PostRequest() {
     academic_level: 'Undergraduate',
     description: '',
     deadline: '3 days',
-    amount: 1000,
   });
 
   if (authLoading) return <div className="wrap" style={{ padding: '60px 0' }}>Loading…</div>;
@@ -32,7 +37,6 @@ export default function PostRequest() {
   function handleFileChange(e) {
     const selected = e.target.files?.[0];
     if (selected) {
-      // 25MB max size limit check
       if (selected.size > 25 * 1024 * 1024) {
         toast('File is too large. Please select a file under 25MB.');
         return;
@@ -53,9 +57,18 @@ export default function PostRequest() {
     e.preventDefault();
     if (submitting) return;
     if (!data.title.trim()) { toast('Please give your request a short title.'); return; }
-    const exactAmount = Math.max(0, Number(data.amount) || 0);
-    if (exactAmount <= 0) { toast('Please enter a valid payment amount (₹).'); return; }
     
+    let bMin = 500;
+    let bMax = 1000;
+    if (selectedRangeIdx === 'custom') {
+      bMin = Math.max(0, Number(customMin) || 0);
+      bMax = Math.max(bMin, Number(customMax) || bMin);
+    } else {
+      const r = BUDGET_RANGES[selectedRangeIdx] || BUDGET_RANGES[5];
+      bMin = r.min;
+      bMax = r.max;
+    }
+
     setSubmitting(true);
     setUploadStatus(file ? 'Uploading document…' : 'Posting request…');
 
@@ -72,7 +85,6 @@ export default function PostRequest() {
           }
         } catch (uploadErr) {
           console.warn('Storage upload note:', uploadErr);
-          // Still proceed with attachment name if storage bucket was not created yet
           attachmentName = file.name;
         }
       }
@@ -86,13 +98,15 @@ export default function PostRequest() {
         academic_level: data.academic_level,
         description: cleanText(data.description, 2000),
         deadline: data.deadline,
-        budget_min: exactAmount,
-        budget_max: exactAmount,
+        budget_min: bMin,
+        budget_max: bMax,
+        price_approved: false,
+        finalized_price: null,
         attachment_url: attachmentUrl,
         attachment_name: attachmentName,
       });
 
-      toast('Posted! Your request is now live on the board.');
+      toast('Posted! Our administrators will review the scope and finalize the exact price quote for your budget.');
       navigate('/dashboard');
     } catch (err) {
       console.error('Post request error:', err);
@@ -105,10 +119,10 @@ export default function PostRequest() {
 
   return (
     <section className="wrap" style={{ paddingTop: 'clamp(24px, 5vw, 48px)', paddingBottom: 'clamp(32px, 5vw, 60px)' }}>
-      <div style={{ maxWidth: 600, margin: '0 auto' }}>
+      <div style={{ maxWidth: 620, margin: '0 auto' }}>
         <h2 style={{ fontSize: 'clamp(22px, 4.5vw, 28px)', marginBottom: 6 }}>What do you need help with?</h2>
         <p className="muted" style={{ fontSize: 14.5, marginBottom: 22 }}>
-          Add your assignment, project, presentation or journal details, then it goes live on the board.
+          Choose your expected budget range. Our admin team will evaluate the requirements and lock the finalized price.
         </p>
 
         <form onSubmit={handleSubmit} className="card">
@@ -182,11 +196,11 @@ export default function PostRequest() {
                   </div>
                 </label>
               ) : (
-                <div className="file-selected-badge">
+                <div className="file-selected-badge" style={{ maxWidth: '100%', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', minWidth: 0, flex: 1 }}>
-                    <IconPaperclip size={20} color="var(--blue)" />
-                    <div style={{ overflow: 'hidden', minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    <IconPaperclip size={20} color="var(--blue)" style={{ flexShrink: 0 }} />
+                    <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', wordBreak: 'break-all' }}>
                         {file.name}
                       </div>
                       <div className="muted" style={{ fontSize: 12 }}>{formatBytes(file.size)}</div>
@@ -205,29 +219,58 @@ export default function PostRequest() {
             </div>
           </div>
 
-          <div className="form-row-2">
-            <div className="field" style={{ flex: 1 }}>
-              <label>Deadline</label>
-              <select value={data.deadline} onChange={update('deadline')}>
-                {DEADLINES.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
+          <div className="field">
+            <label>Deadline</label>
+            <select value={data.deadline} onChange={update('deadline')}>
+              {DEADLINES.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+
+          {/* Budget Range Selector */}
+          <div className="field">
+            <label style={{ fontWeight: 700 }}>Choose Your Budget Range (₹)</label>
+            <p className="muted" style={{ fontSize: 12.5, marginTop: 2, marginBottom: 10 }}>
+              Select a suitable budget range. Admins will review the work scope and confirm the exact approved price.
+            </p>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {BUDGET_RANGES.map((r, idx) => (
+                <button
+                  key={r.label}
+                  type="button"
+                  className={`chip ${selectedRangeIdx === idx ? 'selected' : ''}`}
+                  onClick={() => setSelectedRangeIdx(idx)}
+                  style={{ fontSize: 13, padding: '6px 14px', borderRadius: 99 }}
+                >
+                  {r.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`chip ${selectedRangeIdx === 'custom' ? 'selected' : ''}`}
+                onClick={() => setSelectedRangeIdx('custom')}
+                style={{ fontSize: 13, padding: '6px 14px', borderRadius: 99 }}
+              >
+                Custom Range ✏️
+              </button>
             </div>
-            <div className="field" style={{ flex: 1 }}>
-              <label>Exact Payment Amount (₹)</label>
-              <input 
-                type="number" 
-                min="100" 
-                step="50"
-                placeholder="e.g. 1000" 
-                value={data.amount} 
-                onChange={update('amount')} 
-                required
-              />
-            </div>
+
+            {selectedRangeIdx === 'custom' && (
+              <div className="form-row-2" style={{ background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div className="field" style={{ flex: 1, margin: 0 }}>
+                  <label style={{ fontSize: 12 }}>Min Budget (₹)</label>
+                  <input type="number" min="0" value={customMin} onChange={(e) => setCustomMin(e.target.value)} />
+                </div>
+                <div className="field" style={{ flex: 1, margin: 0 }}>
+                  <label style={{ fontSize: 12 }}>Max Budget (₹)</label>
+                  <input type="number" min={customMin} value={customMax} onChange={(e) => setCustomMax(e.target.value)} />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="field-hint" style={{ marginBottom: 20 }}>
-            Exact amount to be paid after you review and approve the submitted assignment.
+            💡 You will only pay the finalized amount after the assignment is completed and delivered.
           </div>
 
           <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>

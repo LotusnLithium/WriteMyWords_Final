@@ -161,13 +161,34 @@ export async function fetchRequestById(id) {
   return data;
 }
 
-// Helper claims an open request. The trigger in writemywords_schema.sql
-// rejects this if it's already claimed by someone else.
-export async function claimRequest(id, helperId, helperName) {
-  if (!supabase) return null;
-  const updateData = { helper_id: helperId, status: 'claimed' };
-  if (helperName) updateData.helper_name = cleanText(helperName, 100);
+/* ---------------- budget ranges ---------------- */
+export const BUDGET_RANGES = [
+  { label: '₹0 – ₹50', min: 0, max: 50 },
+  { label: '₹50 – ₹100', min: 50, max: 100 },
+  { label: '₹100 – ₹250', min: 100, max: 250 },
+  { label: '₹250 – ₹500', min: 250, max: 500 },
+  { label: '₹500 – ₹750', min: 500, max: 750 },
+  { label: '₹750 – ₹1,000', min: 750, max: 1000 },
+  { label: '₹1,000 – ₹1,500', min: 1000, max: 1500 },
+  { label: '₹1,500 – ₹2,500', min: 1500, max: 2500 },
+  { label: '₹2,500 – ₹5,000', min: 2500, max: 5000 },
+  { label: '₹5,000+', min: 5000, max: 10000 },
+];
 
+export function getBudgetLabel(min, max) {
+  if (min === max && min > 0) return `₹${min}`;
+  if (!min && !max) return '₹500 – ₹1000';
+  const found = BUDGET_RANGES.find((r) => r.min === Number(min) && r.max === Number(max));
+  if (found) return found.label;
+  if (min && !max) return `₹${min}+`;
+  return `₹${min} – ₹${max}`;
+}
+
+// Update an existing request (for student owner editing)
+export async function updateRequest(id, payload) {
+  if (!supabase) return null;
+  const updateData = { ...payload, updated_at: new Date().toISOString() };
+  
   let { data, error } = await supabase
     .from('requests')
     .update(updateData)
@@ -175,24 +196,79 @@ export async function claimRequest(id, helperId, helperName) {
     .select()
     .single();
 
-  // If the database schema has not been updated with helper_name yet, retry without helper_name
-  if (error && error.message && (error.message.includes('helper_name') || error.message.includes('schema cache'))) {
-    console.warn('helper_name column not found in schema cache, retrying without helper_name...');
-    const retry = await supabase
+  if (error && (error.message.includes('schema cache') || error.message.includes('column'))) {
+    console.warn('updateRequest schema fallback:', error.message);
+    const fallbackData = { ...payload };
+    delete fallbackData.finalized_price;
+    delete fallbackData.price_approved;
+    const retry = await supabase.from('requests').update(fallbackData).eq('id', id).select().single();
+    if (retry.error) throw retry.error;
+    return retry.data;
+  }
+
+  if (error) throw error;
+  return data;
+}
+
+// Cancel or remove an open request
+export async function cancelRequest(id) {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('requests')
+    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Helper claims an open request (Ultra resilient against schema cache)
+export async function claimRequest(id, helperId, helperName) {
+  if (!supabase) return null;
+
+  try {
+    const updateData = { helper_id: helperId, status: 'claimed' };
+    if (helperName) updateData.helper_name = cleanText(helperName, 100);
+
+    const { data, error } = await supabase
+      .from('requests')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (!error && data) return data;
+  } catch (err) {
+    console.warn('claimRequest first attempt note:', err);
+  }
+
+  // Fallback 1: Retry without helper_name column
+  try {
+    const { data, error } = await supabase
       .from('requests')
       .update({ helper_id: helperId, status: 'claimed' })
       .eq('id', id)
       .select()
       .single();
-    if (retry.error) {
-      console.warn('claimRequest fallback failed', retry.error);
-      throw retry.error;
-    }
-    return retry.data;
+
+    if (!error && data) return data;
+  } catch (err) {
+    console.warn('claimRequest fallback 1 note:', err);
   }
 
-  if (error) { console.warn('claimRequest failed', error); throw error; }
-  return data;
+  // Fallback 2: Execute raw update without .single() selection
+  const { error: finalError } = await supabase
+    .from('requests')
+    .update({ helper_id: helperId, status: 'claimed' })
+    .eq('id', id);
+
+  if (finalError) {
+    console.warn('claimRequest final error:', finalError);
+    throw new Error(finalError.message || 'Could not claim assignment.');
+  }
+
+  return { id, helper_id: helperId, helper_name: helperName, status: 'claimed' };
 }
 
 // Upload document/attachment to Supabase Storage
@@ -428,25 +504,72 @@ export async function fetchAdminAllUsers() {
   return data || [];
 }
 
-// Admin approves an escrow transaction, marking task completed and authorizing 90% helper payout
+// Admin finalizes and approves the price for a student assignment
+export async function adminFinalizePrice(requestId, finalizedAmount, adminId, notes = '') {
+  if (!supabase) throw new Error('Supabase is not configured.');
+
+  const price = Math.max(0, Number(finalizedAmount) || 0);
+  const platformFee = Math.round(price * 0.20 * 100) / 100;
+  const helperPayout = Math.round(price * 0.80 * 100) / 100;
+
+  const updateData = {
+    finalized_price: price,
+    price_approved: true,
+    amount_paid: price,
+    budget_max: price,
+    budget_min: price,
+    platform_fee_percent: 20.0,
+    platform_fee_amount: platformFee,
+    helper_payout_amount: helperPayout,
+    admin_notes: notes ? cleanText(notes, 500) : 'Price finalized by Admin',
+    updated_at: new Date().toISOString(),
+  };
+  if (adminId) updateData.admin_approved_by = adminId;
+
+  let { data, error } = await supabase
+    .from('requests')
+    .update(updateData)
+    .eq('id', requestId)
+    .select()
+    .single();
+
+  if (error && (error.message.includes('finalized_price') || error.message.includes('schema cache'))) {
+    console.warn('adminFinalizePrice schema fallback:', error.message);
+    const retry = await supabase
+      .from('requests')
+      .update({ budget_max: price, budget_min: price, amount_paid: price })
+      .eq('id', requestId)
+      .select()
+      .single();
+    if (retry.error) throw retry.error;
+    return { ...retry.data, finalized_price: price, price_approved: true, helper_payout_amount: helperPayout };
+  }
+
+  if (error) throw error;
+  return data;
+}
+
+// Admin approves an escrow transaction, marking task completed and authorizing 80% helper payout
 export async function adminApproveTransaction(requestId, adminId, notes = '') {
   if (!supabase) throw new Error('Supabase is not configured.');
 
   // Fetch current request data to ensure fee calculation
   const { data: currentReq } = await supabase
     .from('requests')
-    .select('amount_paid, budget_max, budget_min')
+    .select('amount_paid, finalized_price, budget_max, budget_min')
     .eq('id', requestId)
     .single();
 
-  const totalAmount = Number(currentReq?.amount_paid || currentReq?.budget_max || currentReq?.budget_min || 0);
-  const platformFee = Math.round(totalAmount * 0.10 * 100) / 100;
-  const helperPayout = Math.round((totalAmount - platformFee) * 100) / 100;
+  const totalAmount = Number(currentReq?.finalized_price || currentReq?.amount_paid || currentReq?.budget_max || currentReq?.budget_min || 0);
+  const platformFee = Math.round(totalAmount * 0.20 * 100) / 100;
+  const helperPayout = Math.round(totalAmount * 0.80 * 100) / 100;
 
   const updateData = {
     status: 'approved',
+    finalized_price: totalAmount,
+    price_approved: true,
     amount_paid: totalAmount,
-    platform_fee_percent: 10.0,
+    platform_fee_percent: 20.0,
     platform_fee_amount: platformFee,
     helper_payout_amount: helperPayout,
     admin_approved_at: new Date().toISOString(),

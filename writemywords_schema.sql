@@ -27,7 +27,7 @@ ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
 -- ==============================================================================
--- REQUESTS TABLE (With Document Attachment, Word Solution, Escrow & 10% Platform Fee)
+-- REQUESTS TABLE (With Document Attachment, Word Solution, Quote Finalization & 20% Platform Fee)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS public.requests (
   deadline TEXT NOT NULL DEFAULT '3 days',
   budget_min NUMERIC NOT NULL DEFAULT 0,
   budget_max NUMERIC NOT NULL DEFAULT 0,
+  finalized_price NUMERIC,
+  price_approved BOOLEAN NOT NULL DEFAULT false,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'claimed', 'delivered', 'pending_approval', 'approved', 'cancelled', 'refunded')),
   
   -- Document Attachments (Work Provider / Student initial brief)
@@ -60,8 +62,8 @@ CREATE TABLE IF NOT EXISTS public.requests (
   amount_paid NUMERIC,
   paid_at TIMESTAMPTZ,
   
-  -- Platform fee & Helper payout tracking (10% platform fee, 90% helper payout)
-  platform_fee_percent NUMERIC NOT NULL DEFAULT 10.0,
+  -- Platform fee & Helper payout tracking (20% platform fee, 80% helper payout)
+  platform_fee_percent NUMERIC NOT NULL DEFAULT 20.0,
   platform_fee_amount NUMERIC NOT NULL DEFAULT 0,
   helper_payout_amount NUMERIC NOT NULL DEFAULT 0,
   admin_approved_at TIMESTAMPTZ,
@@ -75,16 +77,19 @@ CREATE TABLE IF NOT EXISTS public.requests (
 -- Ensure all columns exist for existing deployments
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS requester_name TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS helper_name TEXT;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS finalized_price NUMERIC;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS price_approved BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS attachment_name TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS delivery_file_url TEXT;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS delivery_file_name TEXT;
-ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_percent NUMERIC NOT NULL DEFAULT 10.0;
+ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_percent NUMERIC NOT NULL DEFAULT 20.0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS platform_fee_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS helper_payout_amount NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS admin_approved_at TIMESTAMPTZ;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS admin_approved_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
 ALTER TABLE public.requests ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+
 
 -- Update status constraint if table exists
 ALTER TABLE public.requests DROP CONSTRAINT IF EXISTS requests_status_check;

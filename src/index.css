@@ -630,6 +630,10 @@ section {
   padding: 12px 14px;
   box-shadow: var(--shadow-sm);
   flex-wrap: wrap;
+  max-width: 100%;
+  overflow: hidden;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .document-attachment-card {
@@ -642,18 +646,24 @@ section {
   border-radius: var(--r-md);
   padding: 14px 16px;
   flex-wrap: wrap;
+  max-width: 100%;
+  overflow: hidden;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 540px) {
   .document-attachment-card {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 12px;
+    padding: 12px 14px;
   }
   .document-attachment-card .btn {
     width: 100%;
   }
 }
+
 
 /* Toast */
 #toast-host {

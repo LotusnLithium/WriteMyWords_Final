@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-  claimRequest, ensureProfile, fetchMyRequests, fetchOpenRequests, getProfile, getSession,
-  insertRequest, onAuthChange, signInUser, signOutUser, signUpUser, submitDelivery, supabase,
+  cancelRequest, claimRequest, ensureProfile, fetchMyRequests, fetchOpenRequests, getProfile, getSession,
+  insertRequest, onAuthChange, signInUser, signOutUser, signUpUser, submitDelivery, supabase, updateRequest,
 } from '../lib/supabaseClient';
 
 const AppContext = createContext(null);
@@ -99,6 +99,20 @@ export function AppProvider({ children }) {
     return row;
   }, [session, refreshMine, refreshBoard]);
 
+  const editRequest = useCallback(async (requestId, data) => {
+    if (!session?.user) throw new Error('You need to be signed in to edit a request.');
+    const row = await updateRequest(requestId, data);
+    await refreshMine(); await refreshBoard();
+    return row;
+  }, [session, refreshMine, refreshBoard]);
+
+  const cancelMyRequest = useCallback(async (requestId) => {
+    if (!session?.user) throw new Error('You need to be signed in.');
+    const row = await cancelRequest(requestId);
+    await refreshMine(); await refreshBoard();
+    return row;
+  }, [session, refreshMine, refreshBoard]);
+
   const claim = useCallback(async (requestId) => {
     if (!session?.user) throw new Error('You need to be signed in to help.');
     const helperName = user?.name || session.user?.user_metadata?.name || 'Expert';
@@ -116,7 +130,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, session, authLoading, requests, myRequests,
-      signup, login, logout, postRequest, claim, deliver, refreshMine, refreshBoard, toast,
+      signup, login, logout, postRequest, editRequest, cancelMyRequest, claim, deliver, refreshMine, refreshBoard, toast,
     }}>
       {children}
       <div id="toast-host">

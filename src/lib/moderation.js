@@ -17,11 +17,11 @@ const RESTRICTED_PATTERNS = [
 /**
  * Checks if text contains abusive, harsh, or restricted words.
  * @param {string} text 
- * @returns {{ isClean: boolean, matchedWord: string | null }}
+ * @returns {{ isClean: boolean, isValid: boolean, matchedWord: string | null, reason: string | null }}
  */
 export function validateMessageContent(text) {
   if (!text || typeof text !== 'string') {
-    return { isClean: true, matchedWord: null };
+    return { isClean: true, isValid: true, matchedWord: null, reason: null };
   }
 
   const clean = text.trim();
@@ -30,12 +30,14 @@ export function validateMessageContent(text) {
     if (match) {
       return {
         isClean: false,
+        isValid: false,
         matchedWord: match[0],
+        reason: 'Harsh, abusive, or profanity language is strictly prohibited. Please keep communication respectful.',
       };
     }
   }
 
-  return { isClean: true, matchedWord: null };
+  return { isClean: true, isValid: true, matchedWord: null, reason: null };
 }
 
 /**
