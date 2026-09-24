@@ -77,7 +77,7 @@ export default function Nav() {
                   <IconDashboard size={18} color="var(--blue)" /> <strong>Dashboard & My Projects</strong>
                 </Link>
               )}
-              {isAdmin && (
+              {user && (
                 <Link to="/admin" className="mobile-nav-link" onClick={() => setMenuOpen(false)} style={{ background: '#1e1b4b', color: '#c7d2fe', borderRadius: 8, padding: '10px 12px' }}>
                   <IconShield size={18} color="#a5b4fc" /> <strong>Admin Escrow Portal</strong>
                 </Link>
@@ -87,6 +87,9 @@ export default function Nav() {
               </Link>
               <Link to="/post" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
                 <IconEdit size={18} color="var(--ink-soft)" /> Post an Assignment
+              </Link>
+              <Link to="/admin" className="mobile-nav-link" onClick={() => setMenuOpen(false)} style={{ background: '#1e1b4b', color: '#c7d2fe', borderRadius: 8, padding: '10px 12px' }}>
+                <IconShield size={18} color="#a5b4fc" /> <strong>Admin Escrow Portal</strong>
               </Link>
             </div>
 
@@ -133,11 +136,9 @@ export default function Nav() {
             <Link to="/board">Browse Requests</Link>
             <Link to="/post">Post Request</Link>
             {user && <Link to="/dashboard">Dashboard</Link>}
-            {isAdmin && (
-              <Link to="/admin" style={{ color: '#4338ca', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, background: '#e0e7ff', padding: '4px 10px', borderRadius: 6 }}>
-                <IconShield size={14} color="#4338ca" /> Admin Portal
-              </Link>
-            )}
+            <Link to="/admin" style={{ color: '#4338ca', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, background: '#e0e7ff', padding: '5px 12px', borderRadius: 6 }}>
+              <IconShield size={14} color="#4338ca" /> Admin Portal
+            </Link>
           </nav>
 
           {/* Desktop Auth Buttons */}
