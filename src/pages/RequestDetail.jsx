@@ -9,8 +9,8 @@ import {
 import InvoiceModal from '../components/InvoiceModal.jsx';
 import { validateMessageContent, validateUploadedFile } from '../lib/moderation.js';
 import {
-  IconCheckCircle, IconClose, IconEdit, IconFileText, IconHandshake, IconPaperclip,
-  IconPhone, IconReceipt, IconShield, IconTrash, IconUser,
+  IconCheckCircle, IconClose, IconEdit, IconFileText, IconHandshake, IconLock,
+  IconPaperclip, IconPhone, IconReceipt, IconShield, IconTrash, IconUser,
 } from '../components/Icons.jsx';
 
 const STATUS_LABEL = {
@@ -64,6 +64,18 @@ export default function RequestDetail() {
   const isHelper = user && request && request.helper_id === user.id;
   const isAdmin = user && (user.role === 'admin' || user.email?.toLowerCase().includes('admin'));
   const isParticipant = isOwner || isHelper || isAdmin;
+
+  const isPaidOrApproved = Boolean(
+    request && (
+      request.status === 'approved' ||
+      request.status === 'pending_approval' ||
+      (Number(request.amount_paid) > 0) ||
+      Boolean(request.payment_id)
+    )
+  );
+
+  // Deliverable is unlocked ONLY for the Expert who created it, Admin, or Student if already paid/approved
+  const isDeliverableUnlocked = Boolean(isHelper || isAdmin || isPaidOrApproved);
 
   // Initialize edit form when opening edit modal
   useEffect(() => {
@@ -132,6 +144,27 @@ export default function RequestDetail() {
       clearInterval(pollInterval);
     };
   }, [id, isParticipant]);
+
+  // Anti-leak keyboard event protection when viewing an unpaid deliverable
+  useEffect(() => {
+    if (!request || request.status !== 'delivered' || isDeliverableUnlocked) return;
+
+    const handleKeyDown = (e) => {
+      // Block Ctrl+P / Cmd+P (Print)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        toast('🔒 Printing is disabled for escrow-protected deliverables. Complete payment to download original files.');
+      }
+      // Block Ctrl+S / Cmd+S (Save Page)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        toast('🔒 Saving page is disabled for escrow-protected deliverables.');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [request?.status, isDeliverableUnlocked, toast]);
 
   if (authLoading) return <div className="wrap" style={{ padding: '60px 0', textAlign: 'center' }}>Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
@@ -603,54 +636,182 @@ export default function RequestDetail() {
 
             {/* Delivered State */}
             {request.status === 'delivered' && (
-              <div className="card" style={{ marginTop: 22, background: 'rgba(49, 87, 213, 0.03)', borderColor: 'var(--blue)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                  <h3 style={{ fontSize: 17 }}>Delivered Guidance</h3>
-                  <span className="badge badge-warn">Awaiting Approval</span>
-                </div>
-
-                {request.delivery_text && (
-                  <p style={{ fontSize: 14.5, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.6, wordBreak: 'break-word' }}>
-                    {request.delivery_text}
-                  </p>
-                )}
-
-                {/* Delivered Word Document */}
-                {(request.delivery_file_url || request.delivery_file_name) && (
-                  <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1, maxWidth: '100%' }}>
-                      <IconFileText size={24} color="var(--blue)" style={{ flexShrink: 0 }} />
-                      <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
-                          Delivered Document
-                        </div>
-                        <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
-                          {request.delivery_file_name || 'Completed Guidance Document.docx'}
-                        </div>
-                      </div>
-                    </div>
-                    {request.delivery_file_url && (
-                      <a
-                        href={request.delivery_file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-primary btn-sm"
-                        download
-                        style={{ flexShrink: 0 }}
-                      >
-                        Download File
-                      </a>
-                    )}
+              <div
+                className={`card ${!isDeliverableUnlocked ? 'escrow-locked-shield' : ''}`}
+                style={{
+                  marginTop: 22,
+                  background: !isDeliverableUnlocked ? 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' : 'rgba(49, 87, 213, 0.03)',
+                  borderColor: 'var(--blue)',
+                  position: 'relative',
+                }}
+                onContextMenu={!isDeliverableUnlocked ? (e) => e.preventDefault() : undefined}
+                onCopy={!isDeliverableUnlocked ? (e) => e.preventDefault() : undefined}
+                onCut={!isDeliverableUnlocked ? (e) => e.preventDefault() : undefined}
+                onDragStart={!isDeliverableUnlocked ? (e) => e.preventDefault() : undefined}
+              >
+                {/* Diagonal Anti-Screenshot Watermark Pattern for locked deliverable */}
+                {!isDeliverableUnlocked && (
+                  <div className="escrow-watermark-pattern" aria-hidden="true">
+                    <span className="escrow-watermark-text">WriteMyWords Escrow Protected · Unpaid Deliverable</span>
+                    <span className="escrow-watermark-text">Strict Confidentiality · Anti-Leak Shield</span>
+                    <span className="escrow-watermark-text">WriteMyWords Escrow Protected · Unpaid Deliverable</span>
+                    <span className="escrow-watermark-text">Strict Confidentiality · Anti-Leak Shield</span>
                   </div>
                 )}
 
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                  <h3 style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 7 }}>
+                    {!isDeliverableUnlocked ? (
+                      <>
+                        <IconLock size={18} color="var(--blue)" />
+                        <span>Delivered Solution (Escrow Protected)</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconFileText size={18} color="var(--blue)" />
+                        <span>Delivered Guidance & Documents</span>
+                      </>
+                    )}
+                  </h3>
+                  <span className="badge badge-warn" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <IconShield size={12} color="#b45309" /> Awaiting Payment & Approval
+                  </span>
+                </div>
+
+                {/* UNLOCKED VIEW (For Helper, Admin, or Student if already paid) */}
+                {isDeliverableUnlocked ? (
+                  <>
+                    {request.delivery_text && (
+                      <p style={{ fontSize: 14.5, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                        {request.delivery_text}
+                      </p>
+                    )}
+
+                    {/* Unlocked Delivered Word Document */}
+                    {(request.delivery_file_url || request.delivery_file_name) && (
+                      <div className="document-attachment-card" style={{ marginTop: 14, background: '#fff' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1, maxWidth: '100%' }}>
+                          <IconFileText size={24} color="var(--blue)" style={{ flexShrink: 0 }} />
+                          <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--blue)', textTransform: 'uppercase' }}>
+                              Delivered Document
+                            </div>
+                            <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                              {request.delivery_file_name || 'Completed Guidance Document.docx'}
+                            </div>
+                          </div>
+                        </div>
+                        {request.delivery_file_url && (
+                          <a
+                            href={request.delivery_file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-primary btn-sm"
+                            download
+                            style={{ flexShrink: 0 }}
+                          >
+                            Download File
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  /* LOCKED SHIELD VIEW (For Student before paying) */
+                  <>
+                    {/* Blurred Solution Text with Frosted Glass Overlay */}
+                    <div className="escrow-blur-container" style={{ marginTop: 10 }}>
+                      <div className="escrow-blur-content" aria-hidden="true">
+                        <p style={{ fontWeight: 600, color: '#1e293b' }}>
+                          {request.delivery_text ? request.delivery_text.slice(0, 60) + '...' : 'Complete academic guidance and methodology notes...'}
+                        </p>
+                        <p>
+                          Section 1: Academic Overview, Structural Framework, and Problem Analysis.
+                          Comprehensive resolution prepared according to standard university marking criteria.
+                        </p>
+                        <p>
+                          Section 2: Research synthesis, supporting references, annotated bibliography, and structured conclusions.
+                          All deliverables have been compiled and verified by your expert.
+                        </p>
+                      </div>
+
+                      <div className="escrow-lock-overlay">
+                        <div className="escrow-lock-icon-glow">
+                          <IconLock size={24} color="var(--blue)" />
+                        </div>
+                        <h4 style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>
+                          🔒 Solution Guidance Locked by Escrow
+                        </h4>
+                        <p className="muted" style={{ fontSize: 13, maxWidth: 440, marginTop: 4, lineHeight: 1.45 }}>
+                          The verified expert has delivered the complete solution and notes. To read the full guidance and download attached files, complete your secure payment.
+                        </p>
+                        <button
+                          className="btn btn-primary"
+                          style={{ marginTop: 12, padding: '9px 20px', fontSize: 13.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          disabled={busy}
+                          onClick={handleApproveAndPay}
+                        >
+                          <IconLock size={14} />
+                          {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${finalizedAmt || request.budget_max || request.budget_min || 0} to Unlock`}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Locked Word Document Card (NO download URL rendered in DOM) */}
+                    {(request.delivery_file_url || request.delivery_file_name) && (
+                      <div className="escrow-locked-file-card">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 8,
+                            background: 'rgba(49,87,213,0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <IconLock size={18} color="var(--blue)" />
+                          </div>
+                          <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--blue)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Completed Solution File (.docx / .pdf)
+                            </div>
+                            <div style={{ fontWeight: 600, fontSize: 13.5, marginTop: 1, wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                              {request.delivery_file_name || 'Completed_Assignment_Solution.docx'}
+                            </div>
+                            <div className="muted" style={{ fontSize: 12, marginTop: 1 }}>
+                              🔒 File download is held safely in escrow. Complete payment to download.
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          disabled={busy}
+                          onClick={handleApproveAndPay}
+                          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13 }}
+                        >
+                          <IconLock size={13} /> Pay & Download
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Requester Escrow Guarantee & Payment Approval Bar */}
                 {isOwner && (
-                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                    <p style={{ fontSize: 13.5, color: 'rgba(18,20,43,0.7)', marginBottom: 12 }}>
-                      Review the guidance and document above. Once satisfied, click below to approve and pay the helper.
-                    </p>
+                  <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                    <div style={{ padding: '12px 14px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe', marginBottom: 14 }}>
+                      <div style={{ fontWeight: 600, color: '#1e40af', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <IconShield size={16} color="#1e40af" /> 100% Escrow Protection Guarantee
+                      </div>
+                      <div style={{ color: '#1e3a8a', fontSize: 12.5, marginTop: 3, lineHeight: 1.45 }}>
+                        Your funds are held in secure escrow. The expert only receives payout after your final satisfaction and admin verification.
+                      </div>
+                    </div>
                     <button className="btn btn-primary btn-block" disabled={busy} onClick={handleApproveAndPay}>
-                      {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${finalizedAmt || request.budget_max || request.budget_min || 0}`}
+                      {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${finalizedAmt || request.budget_max || request.budget_min || 0} via Razorpay`}
                     </button>
                   </div>
                 )}
