@@ -7,7 +7,7 @@ import {
   uploadAttachment,
 } from '../lib/supabaseClient';
 import InvoiceModal from '../components/InvoiceModal.jsx';
-import { validateMessageContent } from '../lib/moderation.js';
+import { validateMessageContent, validateUploadedFile } from '../lib/moderation.js';
 import {
   IconCheckCircle, IconClose, IconEdit, IconFileText, IconHandshake, IconPaperclip,
   IconPhone, IconReceipt, IconShield, IconTrash, IconUser,
@@ -36,6 +36,7 @@ export default function RequestDetail() {
   const [busyText, setBusyText] = useState('');
   const [showInvoice, setShowInvoice] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showSafetyRulesModal, setShowSafetyRulesModal] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   
   // Edit Form State
@@ -151,8 +152,9 @@ export default function RequestDetail() {
   function handleDeliveryFileChange(e) {
     const selected = e.target.files?.[0];
     if (selected) {
-      if (selected.size > 25 * 1024 * 1024) {
-        toast('File is too large. Please select a file under 25MB.');
+      const fileValidation = validateUploadedFile(selected);
+      if (!fileValidation.isValid) {
+        toast(fileValidation.reason || 'Invalid file format.');
         return;
       }
       setDeliveryFile(selected);
@@ -191,6 +193,19 @@ export default function RequestDetail() {
       toast('Please enter a valid title.');
       return;
     }
+    
+    // Safety check on edit form
+    const titleCheck = validateMessageContent(editForm.title);
+    if (!titleCheck.isValid) {
+      toast(titleCheck.reason);
+      return;
+    }
+    const descCheck = validateMessageContent(editForm.description);
+    if (!descCheck.isValid) {
+      toast(descCheck.reason);
+      return;
+    }
+
     setEditBusy(true);
     try {
       await editRequest(id, {
@@ -215,14 +230,23 @@ export default function RequestDetail() {
 
   async function handleSend(e) {
     e.preventDefault();
-    const textToSend = draft.trim();
-    if (!textToSend || busy) return;
+    const rawText = draft.trim();
+    if (!rawText || busy) return;
 
-    // Moderation check: block harsh, abusive, or profanity language
-    const moderation = validateMessageContent(textToSend);
+    // Run multi-tier safety check
+    const moderation = validateMessageContent(rawText);
+
+    // LEVEL 3: STRICT HARD BLOCK
     if (!moderation.isValid) {
-      toast(moderation.reason || 'Harsh, abusive, or profanity language is not allowed in messages.');
+      toast(moderation.reason || 'This message violates WriteMyWords safety rules.');
       return;
+    }
+
+    // LEVEL 2: WARN & AUTO-MASK (e.g. Phone, WhatsApp, email, social IDs)
+    let textToSend = rawText;
+    if (moderation.hasMaskedContent) {
+      textToSend = moderation.sanitizedText;
+      toast('⚠️ Personal contact details were automatically hidden to protect your privacy and ensure payment escrow protection.');
     }
 
     // Optimistic message append so sender sees it instantly
@@ -246,7 +270,7 @@ export default function RequestDetail() {
       console.error('Send message error:', err);
       toast('Message could not be sent. Please check your connection.');
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      setDraft(textToSend);
+      setDraft(rawText);
     }
   }
 
@@ -792,11 +816,16 @@ export default function RequestDetail() {
 
             {/* Private Messages Thread (Protected: Only Student, Helper, and Admin) */}
             <div className="card" style={{ marginTop: 22 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
                 <h3 style={{ fontSize: 16 }}>Messages</h3>
-                <span className="muted" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <IconShield size={13} color="var(--ink-soft)" /> Respectful communication policy enabled
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowSafetyRulesModal(true)}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 12, padding: '3px 8px', minHeight: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--blue)' }}
+                >
+                  <IconShield size={13} color="var(--blue)" /> Chat Safety Policy
+                </button>
               </div>
               <div style={{ maxHeight: 280, overflowY: 'auto', marginBottom: 12, paddingRight: 4 }}>
                 {messages.length ? (
@@ -994,6 +1023,61 @@ export default function RequestDetail() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Chat Safety Policy & Rules Modal */}
+        {showSafetyRulesModal && (
+          <div className="invoice-overlay" onClick={() => setShowSafetyRulesModal(false)}>
+            <div className="invoice-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580 }}>
+              <div className="invoice-actions-bar">
+                <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <IconShield size={18} color="var(--blue)" /> WriteMyWords Chat Safety Policy
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowSafetyRulesModal(false)}>
+                  <IconClose size={14} /> Close
+                </button>
+              </div>
+
+              <div style={{ padding: '20px 24px', fontSize: 14, lineHeight: 1.6, maxHeight: '75vh', overflowY: 'auto' }}>
+                <p style={{ color: 'var(--ink-soft)', marginBottom: 16 }}>
+                  To safeguard both Students and Verified Experts, our 3-tier moderation engine monitors communication:
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 14px' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--ink)', fontSize: 14 }}>
+                      🟢 1. Allowed & Encouraged
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
+                      Assignment queries, research guidance, thesis outlines, presentation slides, bibliography formatting, and code explanations.
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '12px 14px' }}>
+                    <div style={{ fontWeight: 700, color: '#92400e', fontSize: 14 }}>
+                      🟡 2. Personal Contact Sharing Restricted (Auto-Masked)
+                    </div>
+                    <div style={{ fontSize: 13, color: '#78350f', marginTop: 4 }}>
+                      Sharing phone numbers, WhatsApp, personal emails, Telegram, Instagram, or social links is automatically masked to protect your privacy and ensure payment escrow guarantees.
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 14px' }}>
+                    <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 14 }}>
+                      🔴 3. Strictly Prohibited (Instant Block)
+                    </div>
+                    <ul style={{ fontSize: 13, color: '#7f1d1d', marginTop: 6, paddingLeft: 18, marginBottom: 0 }}>
+                      <li>Off-platform payments, direct UPI transfers, or QR codes.</li>
+                      <li>Sharing passwords, OTPs, or university login credentials.</li>
+                      <li>Live exam impersonation, cheating, or fabricated research data.</li>
+                      <li>Fake certificates, fraudulent LORs, or forged documents.</li>
+                      <li>Abuse, harassment, profanity, or threats.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

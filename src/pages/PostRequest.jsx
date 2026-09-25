@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { BUDGET_RANGES, cleanText, uploadAttachment } from '../lib/supabaseClient';
+import { validateMessageContent, validateUploadedFile } from '../lib/moderation.js';
 import { IconFileText, IconPaperclip } from '../components/Icons.jsx';
 
 const CATEGORIES = ['Assignment Guidance', 'Research', 'Proofreading', 'Formatting', 'Presentation', 'Tutoring', 'Project Support', 'Journal Guidance', 'Other'];
@@ -37,8 +38,9 @@ export default function PostRequest() {
   function handleFileChange(e) {
     const selected = e.target.files?.[0];
     if (selected) {
-      if (selected.size > 25 * 1024 * 1024) {
-        toast('File is too large. Please select a file under 25MB.');
+      const fileValidation = validateUploadedFile(selected);
+      if (!fileValidation.isValid) {
+        toast(fileValidation.reason || 'Invalid file format.');
         return;
       }
       setFile(selected);
@@ -58,6 +60,18 @@ export default function PostRequest() {
     if (submitting) return;
     if (!data.title.trim()) { toast('Please give your request a short title.'); return; }
     
+    // Safety check on title & description
+    const titleCheck = validateMessageContent(data.title);
+    if (!titleCheck.isValid) {
+      toast(titleCheck.reason || 'Please remove restricted content from the title.');
+      return;
+    }
+    const descCheck = validateMessageContent(data.description);
+    if (!descCheck.isValid) {
+      toast(descCheck.reason || 'Please remove restricted content from the description.');
+      return;
+    }
+
     let bMin = 500;
     let bMax = 1000;
     if (selectedRangeIdx === 'custom') {
