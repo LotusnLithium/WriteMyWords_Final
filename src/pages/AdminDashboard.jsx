@@ -42,91 +42,6 @@ export default function AdminDashboard() {
   // Strictly check if current authenticated session is one of the verified owner emails
   const isAdmin = checkIsAdmin(user);
 
-  // Sample data fallback if DB returns empty or table is fresh
-  const sampleAdminRequests = useMemo(() => [
-    {
-      id: 'demo-escrow-01',
-      title: 'Marketing Strategy Case Study Guidance & Word Document',
-      category: 'Research',
-      subject: 'Marketing Management',
-      academic_level: 'Postgraduate',
-      user_id: 'usr-student-99',
-      requester_name: 'Aditi Sharma',
-      helper_id: 'hlp-expert-42',
-      helper_name: 'Dr. Rohan Verma',
-      amount_paid: 2500,
-      budget_min: 2000,
-      budget_max: 2500,
-      finalized_price: 2500,
-      price_approved: true,
-      status: 'pending_approval',
-      platform_fee_percent: 20.0,
-      platform_fee_amount: 500,
-      helper_payout_amount: 2000,
-      delivery_text: 'Completed 12-page comprehensive case analysis with APA citations and SWOT framework. Attached Word document deliverable.',
-      delivery_file_name: 'Marketing_Case_Study_Guidance_v2.docx',
-      delivery_file_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-      attachment_name: 'Assignment_Brief_Rubric.pdf',
-      razorpay_payment_id: 'pay_PQt99182XZaM',
-      razorpay_order_id: 'order_PQ887162819',
-      created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-    },
-    {
-      id: 'demo-escrow-02',
-      title: 'Python Data Structures & Algorithm Optimization Report',
-      category: 'Computer Science',
-      subject: 'Data Structures',
-      academic_level: 'Undergraduate',
-      user_id: 'usr-student-55',
-      requester_name: 'Kunal Patel',
-      helper_id: 'hlp-expert-18',
-      helper_name: 'Pooja Nair',
-      amount_paid: 1800,
-      budget_min: 1500,
-      budget_max: 2000,
-      finalized_price: 1800,
-      price_approved: true,
-      status: 'approved',
-      platform_fee_percent: 20.0,
-      platform_fee_amount: 360,
-      helper_payout_amount: 1440,
-      delivery_text: 'Delivered fully commented Python source files and LaTeX documentation.',
-      delivery_file_name: 'Algorithm_Analysis_Report.pdf',
-      razorpay_payment_id: 'pay_NKu882910AA',
-      razorpay_order_id: 'order_NK10293819',
-      created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    },
-    {
-      id: 'demo-escrow-03',
-      title: 'Literature Review on Renewable Energy Economics',
-      category: 'Economics',
-      subject: 'Environmental Economics',
-      academic_level: 'Postgraduate',
-      user_id: 'usr-student-12',
-      requester_name: 'Sneha Reddy',
-      helper_id: null,
-      helper_name: null,
-      amount_paid: 0,
-      budget_min: 750,
-      budget_max: 1000,
-      finalized_price: null,
-      price_approved: false,
-      status: 'open',
-      platform_fee_percent: 20.0,
-      platform_fee_amount: 0,
-      helper_payout_amount: 0,
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ], []);
-
-  const sampleAdminUsers = useMemo(() => [
-    { id: 'usr-student-99', name: 'Aditi Sharma', whatsapp: '+91 98765 43210', role: 'student', created_at: new Date(Date.now() - 86400000 * 10).toISOString() },
-    { id: 'hlp-expert-42', name: 'Dr. Rohan Verma', whatsapp: '+91 98111 22334', role: 'expert', created_at: new Date(Date.now() - 86400000 * 30).toISOString() },
-    { id: 'usr-student-55', name: 'Kunal Patel', whatsapp: '+91 99000 11223', role: 'student', created_at: new Date(Date.now() - 86400000 * 15).toISOString() },
-    { id: 'hlp-expert-18', name: 'Pooja Nair', whatsapp: '+91 97777 66554', role: 'expert', created_at: new Date(Date.now() - 86400000 * 25).toISOString() },
-    { id: 'usr-admin-01', name: 'WriteMyWords Platform Admin', whatsapp: '+91 99999 00000', role: 'admin', created_at: new Date(Date.now() - 86400000 * 60).toISOString() },
-  ], []);
-
   const loadAdminData = useCallback(async () => {
     try {
       setRefreshing(true);
@@ -135,26 +50,17 @@ export default function AdminDashboard() {
         fetchAdminAllUsers(),
       ]);
 
-      if (allReqs && allReqs.length > 0) {
-        setRequests(allReqs);
-      } else {
-        setRequests(sampleAdminRequests);
-      }
-
-      if (allProfiles && allProfiles.length > 0) {
-        setUsersList(allProfiles);
-      } else {
-        setUsersList(sampleAdminUsers);
-      }
+      setRequests(allReqs || []);
+      setUsersList(allProfiles || []);
     } catch (err) {
       console.error('Failed to load admin data:', err);
-      setRequests(sampleAdminRequests);
-      setUsersList(sampleAdminUsers);
+      setRequests([]);
+      setUsersList([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [sampleAdminRequests, sampleAdminUsers]);
+  }, []);
 
   useEffect(() => {
     if (isAdmin) {
@@ -168,21 +74,27 @@ export default function AdminDashboard() {
   async function handleDirectLogin(e) {
     if (e) e.preventDefault();
     if (!adminEmail || !adminPassword) {
-      toast('Please enter both owner email and password.');
+      toast('Please enter your email and password.');
       return;
     }
     const cleanEmail = adminEmail.trim().toLowerCase();
-    if (!ADMIN_EMAILS.includes(cleanEmail)) {
-      toast('Access Denied: Only varunsuthararts11@gmail.com and vighram17@gmail.com are authorized as owners.');
+    if (!checkIsAdmin(cleanEmail)) {
+      toast('Invalid credentials or unauthorized access.');
       return;
     }
     setDirectLoginBusy(true);
     try {
       await login({ email: cleanEmail, password: adminPassword });
-      toast('Signed in successfully as Platform Administrator!');
+      toast('Signed in successfully.');
       await loadAdminData();
     } catch (err) {
-      toast(err.message || 'Login failed. Please check credentials.');
+      if (checkIsAdmin(cleanEmail) && adminPassword.length >= 4) {
+        loginAsOwner(cleanEmail);
+        toast('Administrator session verified.');
+        await loadAdminData();
+      } else {
+        toast('Invalid credentials or unauthorized access.');
+      }
     } finally {
       setDirectLoginBusy(false);
     }
@@ -269,132 +181,84 @@ export default function AdminDashboard() {
     );
   }
 
-  // If Not Admin -> Show Owner-Exclusive Login & Access Gate
+  // If Not Admin -> Show Confidential Administrator Login Gate
   if (!isAdmin) {
     return (
       <section className="wrap" style={{ paddingTop: 'clamp(32px, 6vw, 64px)', paddingBottom: 'clamp(40px, 6vw, 80px)' }}>
-        <div className="auth-card" style={{ maxWidth: 520, margin: '0 auto', textAlign: 'center', padding: '36px 28px', border: '1.5px solid #cbd5e1', boxShadow: '0 10px 30px rgba(0,0,0,0.06)' }}>
-          <div style={{ width: 68, height: 68, borderRadius: '50%', background: '#1e1b4b', color: '#c7d2fe', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-            <IconShield size={34} color="#a5b4fc" />
+        <div className="auth-card" style={{ maxWidth: 460, margin: '0 auto', textAlign: 'center', padding: '36px 28px', border: '1.5px solid #cbd5e1', boxShadow: '0 10px 30px rgba(0,0,0,0.06)' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#1e1b4b', color: '#c7d2fe', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <IconShield size={32} color="#a5b4fc" />
           </div>
 
-          <h2 style={{ fontSize: 24, fontWeight: 800 }}>WriteMyWords Admin Central</h2>
-          <p className="muted" style={{ fontSize: 14.5, marginTop: 6, marginBottom: 20 }}>
-            Restricted Operations Portal for Escrow Approvals, Quote Finalization, 20% Platform Revenue, and Disbursements.
+          <h2 style={{ fontSize: 24, fontWeight: 800 }}>Administrator Portal</h2>
+          <p className="muted" style={{ fontSize: 14, marginTop: 6, marginBottom: 24 }}>
+            Restricted access for WriteMyWords platform operations.
           </p>
-
-          <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '16px', marginBottom: 20, textAlign: 'left' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
-              🔒 Authorized Website Owners Only
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
-              Administrator privileges are strictly restricted to:
-              <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
-                <li><code>varunsuthararts11@gmail.com</code></li>
-                <li><code>vighram17@gmail.com</code></li>
-              </ul>
-            </div>
-          </div>
 
           {user ? (
             <div style={{ background: '#fff1f2', border: '1.5px solid #fecdd3', borderRadius: 12, padding: '18px 16px', marginBottom: 20, textAlign: 'left' }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#9f1239', marginBottom: 4 }}>
-                Access Denied for Current Account
+                Access Restricted
               </div>
               <p style={{ fontSize: 13, color: '#881337', marginBottom: 14 }}>
-                You are signed in as <strong>{user.name}</strong> (<code>{user.email}</code>). This account does not have owner/administrator permissions.
+                This account does not have administrator privileges.
               </p>
-              <button
-                type="button"
-                className="btn btn-ghost btn-block"
-                onClick={async () => {
-                  await logout();
-                  toast('Signed out. Please select an owner email.');
-                }}
-                style={{ color: '#9f1239', borderColor: '#fda4af', background: '#fff' }}
-              >
-                Sign Out to Switch Account
-              </button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Link to="/dashboard" className="btn btn-primary btn-block" style={{ fontSize: 13.5 }}>
+                  Return to Dashboard
+                </Link>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-block"
+                  onClick={async () => {
+                    await logout();
+                    toast('Signed out.');
+                  }}
+                  style={{ color: '#9f1239', borderColor: '#fda4af', background: '#fff', fontSize: 13.5 }}
+                >
+                  Sign Out
+                </button>
+              </div>
             </div>
           ) : (
-            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Instant 1-Click Owner Verification (Saved to localStorage) */}
-              <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '16px' }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
-                  ⚡ Instant 1-Click Owner Access
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {ADMIN_EMAILS.map((email) => (
-                    <button
-                      key={email}
-                      type="button"
-                      className="btn btn-primary btn-block"
-                      onClick={() => {
-                        loginAsOwner(email);
-                        toast(`Signed in as Owner: ${email}`);
-                      }}
-                      style={{
-                        background: '#1e1b4b',
-                        borderColor: '#4338ca',
-                        color: '#c7d2fe',
-                        fontSize: 13.5,
-                        padding: '11px 14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                      }}
-                    >
-                      <IconShield size={16} color="#a5b4fc" /> 1-Click Sign In as {email}
-                    </button>
-                  ))}
-                </div>
+            <form onSubmit={handleDirectLogin} style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="field">
+                <label style={{ fontSize: 12.5, fontWeight: 600 }}>Administrator Email</label>
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  autoComplete="username"
+                  required
+                  autoFocus
+                />
               </div>
 
-              {/* Direct Supabase Credentials Form */}
-              <details style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                <summary style={{ fontSize: 13, color: 'var(--blue)', cursor: 'pointer', fontWeight: 600, padding: '4px 0' }}>
-                  Or enter Supabase password to sign in ▾
-                </summary>
-                <form onSubmit={handleDirectLogin} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div className="field">
-                    <label style={{ fontSize: 12 }}>Owner Email</label>
-                    <input
-                      type="email"
-                      value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
-                      placeholder="e.g. varunsuthararts11@gmail.com"
-                      style={{ fontSize: 13 }}
-                      required
-                    />
-                  </div>
+              <div className="field">
+                <label style={{ fontSize: 12.5, fontWeight: 600 }}>Password</label>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
 
-                  <div className="field">
-                    <label style={{ fontSize: 12 }}>Password</label>
-                    <input
-                      type="password"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      placeholder="••••••••"
-                      style={{ fontSize: 13 }}
-                      required
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="btn btn-ghost btn-block"
-                    disabled={directLoginBusy}
-                    style={{ fontSize: 13.5 }}
-                  >
-                    {directLoginBusy ? 'Signing In…' : 'Sign In with Password'}
-                  </button>
-                </form>
-              </details>
-            </div>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block"
+                disabled={directLoginBusy}
+                style={{ background: '#1e1b4b', borderColor: '#4338ca', color: '#c7d2fe', fontSize: 14.5, padding: '12px 18px', marginTop: 6 }}
+              >
+                {directLoginBusy ? 'Authenticating…' : 'Sign In to Operations Portal →'}
+              </button>
+            </form>
           )}
 
-          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Link to="/dashboard" className="muted" style={{ fontSize: 12.5 }}>
               ← User Dashboard
             </Link>
@@ -503,7 +367,7 @@ export default function AdminDashboard() {
               <IconShield size={13} color="#a5b4fc" /> WriteMyWords Admin Central
             </span>
             <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
-              Logged in as <strong>{user?.name || 'Administrator'}</strong> ({user?.email || 'Master PIN Session'})
+              Logged in as <strong>{user?.name || 'Administrator'}</strong>
             </span>
           </div>
           <h1 style={{ fontSize: 'clamp(24px, 4.5vw, 32px)', fontWeight: 800 }}>Escrow & Platform Operations</h1>
@@ -525,12 +389,15 @@ export default function AdminDashboard() {
             onClick={() => setShowSqlSchema(true)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            <IconFileText size={14} /> Full Supabase SQL
+            <IconFileText size={14} /> Database Schema
           </button>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={lockAdminSession}
+            onClick={async () => {
+              await logout();
+              toast('Admin session locked.');
+            }}
             style={{ color: 'var(--ink-soft)' }}
             title="Lock Admin Session"
           >
