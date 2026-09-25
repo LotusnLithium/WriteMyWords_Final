@@ -7,9 +7,10 @@ import {
   uploadAttachment,
 } from '../lib/supabaseClient';
 import InvoiceModal from '../components/InvoiceModal.jsx';
+import SecureDocumentPreviewModal from '../components/SecureDocumentPreviewModal.jsx';
 import { validateMessageContent, validateUploadedFile } from '../lib/moderation.js';
 import {
-  IconCheckCircle, IconClose, IconEdit, IconFileText, IconHandshake, IconLock,
+  IconCheckCircle, IconClose, IconEdit, IconEye, IconFileText, IconHandshake, IconLock,
   IconPaperclip, IconPhone, IconReceipt, IconShield, IconTrash, IconUser,
 } from '../components/Icons.jsx';
 
@@ -35,6 +36,7 @@ export default function RequestDetail() {
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState('');
   const [showInvoice, setShowInvoice] = useState(false);
+  const [showDocPreview, setShowDocPreview] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSafetyRulesModal, setShowSafetyRulesModal] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
@@ -743,17 +745,37 @@ export default function RequestDetail() {
                           🔒 Solution Guidance Locked by Escrow
                         </h4>
                         <p className="muted" style={{ fontSize: 13, maxWidth: 440, marginTop: 4, lineHeight: 1.45 }}>
-                          The verified expert has delivered the complete solution and notes. To read the full guidance and download attached files, complete your secure payment.
+                          The verified expert has delivered the complete solution and notes. Preview the academic structure below or complete payment to unlock full documents.
                         </p>
-                        <button
-                          className="btn btn-primary"
-                          style={{ marginTop: 12, padding: '9px 20px', fontSize: 13.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                          disabled={busy}
-                          onClick={handleApproveAndPay}
-                        >
-                          <IconLock size={14} />
-                          {busy ? 'Opening Razorpay…' : `Approve & Pay ₹${finalizedAmt || request.budget_max || request.budget_min || 0} to Unlock`}
-                        </button>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => setShowDocPreview(true)}
+                            style={{
+                              borderColor: 'var(--blue)',
+                              color: 'var(--blue)',
+                              padding: '8px 16px',
+                              fontSize: 13,
+                              background: '#ffffff',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            <IconEye size={15} color="var(--blue)" /> View Protected Preview
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: '8px 18px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            disabled={busy}
+                            onClick={handleApproveAndPay}
+                          >
+                            <IconLock size={14} />
+                            {busy ? 'Opening Razorpay…' : `Pay ₹${finalizedAmt || request.budget_max || request.budget_min || 0} to Unlock`}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -781,19 +803,37 @@ export default function RequestDetail() {
                               {request.delivery_file_name || 'Completed_Assignment_Solution.docx'}
                             </div>
                             <div className="muted" style={{ fontSize: 12, marginTop: 1 }}>
-                              🔒 File download is held safely in escrow. Complete payment to download.
+                              🔒 Direct download locked. Inspect watermarked preview or pay to download original.
                             </div>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          disabled={busy}
-                          onClick={handleApproveAndPay}
-                          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13 }}
-                        >
-                          <IconLock size={13} /> Pay & Download
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => setShowDocPreview(true)}
+                            style={{
+                              borderColor: 'var(--blue)',
+                              color: 'var(--blue)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              fontSize: 12.5,
+                              padding: '6px 12px',
+                            }}
+                          >
+                            <IconEye size={14} color="var(--blue)" /> Preview
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={busy}
+                            onClick={handleApproveAndPay}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, padding: '6px 14px' }}
+                          >
+                            <IconLock size={13} /> Pay & Download
+                          </button>
+                        </div>
                       </div>
                     )}
                   </>
@@ -1053,6 +1093,17 @@ export default function RequestDetail() {
             request={request}
             user={user}
             onClose={() => setShowInvoice(false)}
+          />
+        )}
+
+        {/* Secure Document Preview Modal (Protected Preview for Student before payment) */}
+        {showDocPreview && (
+          <SecureDocumentPreviewModal
+            request={request}
+            user={user}
+            onClose={() => setShowDocPreview(false)}
+            onApproveAndPay={handleApproveAndPay}
+            busy={busy}
           />
         )}
 

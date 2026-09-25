@@ -930,7 +930,10 @@ section {
   .escrow-blur-container,
   .escrow-blur-content,
   .escrow-lock-overlay,
-  .escrow-locked-file-card {
+  .escrow-locked-file-card,
+  .secure-preview-modal-card,
+  .academic-paper-sheet,
+  .escrow-modal-watermark-grid {
     display: none !important;
   }
 }
