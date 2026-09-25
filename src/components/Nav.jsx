@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
+import { checkIsAdmin } from '../lib/supabaseClient';
 import {
   IconClose, IconDashboard, IconEdit, IconHandshake, IconHome,
   IconList, IconShield, IconUser,
@@ -12,7 +13,7 @@ export default function Nav() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const isAdmin = user && (user.role === 'admin' || user.email?.toLowerCase().includes('admin'));
+  const isAdmin = checkIsAdmin(user);
 
   // Close mobile menu whenever the route changes
   useEffect(() => {

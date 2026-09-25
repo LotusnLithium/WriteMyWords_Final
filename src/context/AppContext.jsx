@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-  cancelRequest, claimRequest, ensureProfile, fetchMyRequests, fetchOpenRequests, getProfile, getSession,
+  cancelRequest, checkIsAdmin, claimRequest, ensureProfile, fetchMyRequests, fetchOpenRequests, getProfile, getSession,
   insertRequest, onAuthChange, signInUser, signOutUser, signUpUser, submitDelivery, supabase, updateRequest,
 } from '../lib/supabaseClient';
 
@@ -57,14 +57,15 @@ export function AppProvider({ children }) {
   useEffect(() => { refreshBoard(); }, [refreshBoard]);
   useEffect(() => { refreshMine(); }, [refreshMine]);
 
+  const isOwnerAdmin = session?.user?.email ? checkIsAdmin(session.user.email) : false;
   const user = session?.user
     ? {
         id: session.user.id,
         email: session.user.email,
         name: profile?.name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
         whatsapp: profile?.whatsapp || session.user.user_metadata?.whatsapp || '',
-        role: profile?.role || session.user.user_metadata?.role || 'student',
         ...profile,
+        role: isOwnerAdmin ? 'admin' : (profile?.role || session.user.user_metadata?.role || 'student'),
       }
     : null;
 

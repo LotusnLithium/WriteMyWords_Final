@@ -145,19 +145,27 @@ CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  assigned_role TEXT;
 BEGIN
+  IF lower(trim(COALESCE(NEW.email, ''))) IN ('varunsuthararts11@gmail.com', 'vighram17@gmail.com') THEN
+    assigned_role := 'admin';
+  ELSE
+    assigned_role := COALESCE(NEW.raw_user_meta_data->>'role', 'student');
+  END IF;
+
   INSERT INTO public.profiles (id, name, whatsapp, role)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'name', split_part(COALESCE(NEW.email, 'user'), '@', 1)),
     COALESCE(NEW.raw_user_meta_data->>'whatsapp', ''),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'student')
+    assigned_role
   )
   ON CONFLICT (id) DO UPDATE
   SET
     name = EXCLUDED.name,
     whatsapp = CASE WHEN EXCLUDED.whatsapp <> '' THEN EXCLUDED.whatsapp ELSE public.profiles.whatsapp END,
-    role = CASE WHEN EXCLUDED.role <> '' THEN EXCLUDED.role ELSE public.profiles.role END,
+    role = assigned_role,
     updated_at = timezone('utc'::text, now());
   RETURN NEW;
 END;
@@ -416,8 +424,18 @@ END $$;
 NOTIFY pgrst, 'reload schema';
 
 -- ==============================================================================
--- TIP: TO MAKE A USER AN ADMIN RUN THIS IN SUPABASE SQL EDITOR:
--- UPDATE public.profiles SET role = 'admin' WHERE id = 'YOUR_USER_UUID';
--- OR:
--- UPDATE public.profiles SET role = 'admin' WHERE id IN (SELECT id FROM auth.users WHERE email = 'your_admin_email@example.com');
+-- OWNER ADMINISTRATOR ACCESS CONFIGURATION
+-- ==============================================================================
+-- Grant administrator role exclusively to website owners:
+UPDATE public.profiles
+SET role = 'admin', updated_at = timezone('utc'::text, now())
+WHERE id IN (
+  SELECT id FROM auth.users
+  WHERE lower(trim(email)) IN ('varunsuthararts11@gmail.com', 'vighram17@gmail.com')
+);
+
+-- ==============================================================================
+-- INSTRUCTIONS:
+-- 1. Run this entire script in your Supabase project's SQL Editor.
+-- 2. When varunsuthararts11@gmail.com or vighram17@gmail.com log in, they will have full admin access.
 -- ==============================================================================

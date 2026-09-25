@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import {
+  ADMIN_EMAILS,
   adminApproveTransaction, adminFinalizePrice, adminRefundOrRejectTransaction, adminUpdateUserRole,
-  fetchAdminAllRequests, fetchAdminAllUsers, getBudgetLabel, supabase,
+  checkIsAdmin, fetchAdminAllRequests, fetchAdminAllUsers, getBudgetLabel, supabase,
 } from '../lib/supabaseClient';
 import InvoiceModal from '../components/InvoiceModal.jsx';
 import {
@@ -14,7 +15,7 @@ import {
 } from '../components/Icons.jsx';
 
 export default function AdminDashboard() {
-  const { user, login, authLoading, toast } = useApp();
+  const { user, login, logout, authLoading, toast } = useApp();
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [usersList, setUsersList] = useState([]);
@@ -23,17 +24,6 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('approvals'); // 'approvals', 'ledger', 'users'
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  
-  // Persistent Admin Unlock Gate State (localStorage / sessionStorage)
-  const [unlockedViaPin, setUnlockedViaPin] = useState(() => {
-    try {
-      return localStorage.getItem('wmw_admin_unlocked') === 'true' || sessionStorage.getItem('wmw_admin_unlocked') === 'true';
-    } catch {
-      return false;
-    }
-  });
-  const [passcode, setPasscode] = useState('');
-  const [elevatingRole, setElevatingRole] = useState(false);
 
   // Direct login state for admin gate
   const [adminEmail, setAdminEmail] = useState('');
@@ -49,8 +39,8 @@ export default function AdminDashboard() {
   const [invoiceRequest, setInvoiceRequest] = useState(null);
   const [updatingRoleUserId, setUpdatingRoleUserId] = useState(null);
 
-  // Check if current session has admin rights
-  const isAdmin = (user && (user.role === 'admin' || user.email?.toLowerCase().includes('admin'))) || unlockedViaPin;
+  // Strictly check if current authenticated session is one of the verified owner emails
+  const isAdmin = checkIsAdmin(user);
 
   // Sample data fallback if DB returns empty or table is fresh
   const sampleAdminRequests = useMemo(() => [
@@ -174,67 +164,25 @@ export default function AdminDashboard() {
     }
   }, [isAdmin, loadAdminData]);
 
-  // Persist unlock in storage
-  function unlockAdminSession() {
-    try {
-      localStorage.setItem('wmw_admin_unlocked', 'true');
-      sessionStorage.setItem('wmw_admin_unlocked', 'true');
-    } catch (e) {}
-    setUnlockedViaPin(true);
-    toast('Administrator mode activated for this session!');
-    loadAdminData();
-  }
-
-  function lockAdminSession() {
-    try {
-      localStorage.removeItem('wmw_admin_unlocked');
-      sessionStorage.removeItem('wmw_admin_unlocked');
-    } catch (e) {}
-    setUnlockedViaPin(false);
-    toast('Admin session locked.');
-  }
-
-  // Elevate current user's profile to Admin
-  async function handleElevateToAdmin() {
-    setElevatingRole(true);
-    try {
-      if (supabase && user?.id) {
-        const { error } = await supabase.from('profiles').update({ role: 'admin' }).eq('id', user.id);
-        if (error) console.warn('Profile update note:', error.message);
-      }
-    } catch (err) {
-      console.warn(err);
-    } finally {
-      unlockAdminSession();
-      setElevatingRole(false);
-    }
-  }
-
-  // Passcode unlock
-  function handlePinUnlock(e) {
-    if (e) e.preventDefault();
-    const p = passcode.trim().toLowerCase();
-    if (p === 'admin' || p === '1234' || p === 'admin123' || p === 'wmw2025' || p === 'superadmin' || p.length >= 3) {
-      unlockAdminSession();
-    } else {
-      toast('Please enter a valid admin passcode (Default: admin)');
-    }
-  }
-
-  // Direct Sign In handler on the admin gate
+  // Direct Sign In handler for the admin gate
   async function handleDirectLogin(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!adminEmail || !adminPassword) {
-      toast('Please enter both email and password.');
+      toast('Please enter both owner email and password.');
+      return;
+    }
+    const cleanEmail = adminEmail.trim().toLowerCase();
+    if (!ADMIN_EMAILS.includes(cleanEmail)) {
+      toast('Access Denied: Only varunsuthararts11@gmail.com and vighram17@gmail.com are authorized as owners.');
       return;
     }
     setDirectLoginBusy(true);
     try {
-      await login({ email: adminEmail, password: adminPassword });
-      unlockAdminSession();
-      toast('Signed in successfully as Admin!');
+      await login({ email: cleanEmail, password: adminPassword });
+      toast('Signed in successfully as Platform Administrator!');
+      await loadAdminData();
     } catch (err) {
-      toast(err.message || 'Login failed. You can use 1-Click Master Unlock.');
+      toast(err.message || 'Login failed. Please check credentials.');
     } finally {
       setDirectLoginBusy(false);
     }
@@ -321,7 +269,7 @@ export default function AdminDashboard() {
     );
   }
 
-  // If Not Admin / Unlocked -> Show Interactive Master Access & Login Gate
+  // If Not Admin -> Show Owner-Exclusive Login & Access Gate
   if (!isAdmin) {
     return (
       <section className="wrap" style={{ paddingTop: 'clamp(32px, 6vw, 64px)', paddingBottom: 'clamp(40px, 6vw, 80px)' }}>
@@ -331,93 +279,100 @@ export default function AdminDashboard() {
           </div>
 
           <h2 style={{ fontSize: 24, fontWeight: 800 }}>WriteMyWords Admin Central</h2>
-          <p className="muted" style={{ fontSize: 14.5, marginTop: 6, marginBottom: 22 }}>
-            Secure operations portal for Escrow Approvals, Quote Finalization, 20% Platform Revenue tracking, and Helper Disbursements.
+          <p className="muted" style={{ fontSize: 14.5, marginTop: 6, marginBottom: 20 }}>
+            Restricted Operations Portal for Escrow Approvals, Quote Finalization, 20% Platform Revenue, and Disbursements.
           </p>
 
-          {/* Quick Option 1: 1-Click Master Unlock */}
-          <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '18px 16px', marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
-              ⚡ Instant Administrator Access
+          <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '16px', marginBottom: 20, textAlign: 'left' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+              🔒 Authorized Website Owners Only
             </div>
-            {user ? (
-              <div>
-                <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-                  Signed in as <strong>{user.name}</strong> (<code>{user.email}</code>).
-                </p>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-block"
-                  onClick={handleElevateToAdmin}
-                  disabled={elevatingRole}
-                  style={{ background: '#1e1b4b', borderColor: '#4338ca', color: '#c7d2fe', fontSize: 15, padding: '12px 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                >
-                  <IconShield size={18} color="#a5b4fc" /> {elevatingRole ? 'Activating Admin Mode…' : 'Unlock & Grant Admin Rights'}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={unlockAdminSession}
-                style={{ background: '#1e1b4b', borderColor: '#4338ca', color: '#c7d2fe', fontSize: 15, padding: '12px 18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-              >
-                <IconShield size={18} color="#a5b4fc" /> 1-Click Master Admin Access →
-              </button>
-            )}
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+              Administrator privileges are strictly restricted to:
+              <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
+                <li><code>varunsuthararts11@gmail.com</code></li>
+                <li><code>vighram17@gmail.com</code></li>
+              </ul>
+            </div>
           </div>
 
-          {/* Quick Option 2: Enter Master PIN */}
-          <form onSubmit={handlePinUnlock} style={{ marginBottom: 20 }}>
-            <div className="field" style={{ textAlign: 'left' }}>
-              <label style={{ fontSize: 12.5, fontWeight: 600 }}>Master Passcode (Default: <code>admin</code>)</label>
-              <div style={{ display: 'flex', gap: 8 }}>
+          {user ? (
+            <div style={{ background: '#fff1f2', border: '1.5px solid #fecdd3', borderRadius: 12, padding: '18px 16px', marginBottom: 20, textAlign: 'left' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#9f1239', marginBottom: 4 }}>
+                Access Denied for Current Account
+              </div>
+              <p style={{ fontSize: 13, color: '#881337', marginBottom: 14 }}>
+                You are signed in as <strong>{user.name}</strong> (<code>{user.email}</code>). This account does not have owner/administrator permissions.
+              </p>
+              <button
+                type="button"
+                className="btn btn-ghost btn-block"
+                onClick={async () => {
+                  await logout();
+                  toast('Signed out. Please sign in with an owner email.');
+                }}
+                style={{ color: '#9f1239', borderColor: '#fda4af', background: '#fff' }}
+              >
+                Sign Out to Switch Account
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleDirectLogin} style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Select Owner Account:</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                {ADMIN_EMAILS.map((email) => (
+                  <button
+                    key={email}
+                    type="button"
+                    onClick={() => setAdminEmail(email)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: adminEmail === email ? '2px solid var(--blue)' : '1px solid var(--border)',
+                      background: adminEmail === email ? '#eff6ff' : '#fff',
+                      fontSize: 13,
+                      fontWeight: adminEmail === email ? 700 : 500,
+                      color: adminEmail === email ? 'var(--blue)' : 'var(--ink)',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    👤 {email}
+                  </button>
+                ))}
+              </div>
+
+              <div className="field" style={{ marginTop: 4 }}>
+                <label style={{ fontSize: 12.5 }}>Owner Email</label>
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="e.g. varunsuthararts11@gmail.com"
+                  required
+                />
+              </div>
+
+              <div className="field">
+                <label style={{ fontSize: 12.5 }}>Password</label>
                 <input
                   type="password"
-                  value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
-                  placeholder="Enter passcode (e.g. admin)"
-                  style={{ flex: 1 }}
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
                 />
-                <button type="submit" className="btn btn-ghost" style={{ padding: '0 16px', fontWeight: 600 }}>
-                  Unlock
-                </button>
               </div>
-            </div>
-          </form>
 
-          {/* Quick Option 3: Direct Email Sign In if not logged in */}
-          {!user && (
-            <details style={{ textAlign: 'left', borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-              <summary style={{ fontSize: 13, color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}>
-                Or sign in with Supabase credentials ▾
-              </summary>
-              <form onSubmit={handleDirectLogin} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div className="field">
-                  <label style={{ fontSize: 12 }}>Email</label>
-                  <input
-                    type="email"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="admin@writemywords.com"
-                    style={{ fontSize: 13 }}
-                  />
-                </div>
-                <div className="field">
-                  <label style={{ fontSize: 12 }}>Password</label>
-                  <input
-                    type="password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="••••••••"
-                    style={{ fontSize: 13 }}
-                  />
-                </div>
-                <button type="submit" className="btn btn-ghost btn-block" disabled={directLoginBusy} style={{ fontSize: 13.5 }}>
-                  {directLoginBusy ? 'Signing In…' : 'Sign In to Supabase Auth'}
-                </button>
-              </form>
-            </details>
+              <button
+                type="submit"
+                className="btn btn-primary btn-block"
+                disabled={directLoginBusy}
+                style={{ background: '#1e1b4b', borderColor: '#4338ca', color: '#c7d2fe', fontSize: 14.5, padding: '12px 18px', marginTop: 4 }}
+              >
+                {directLoginBusy ? 'Signing In…' : 'Sign In to Owner Admin Central →'}
+              </button>
+            </form>
           )}
 
           <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

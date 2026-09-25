@@ -15,6 +15,27 @@ export const supabase = url && anonKey
   : null;
 
 
+/* ---------------- admin configuration ---------------- */
+export const ADMIN_EMAILS = [
+  'varunsuthararts11@gmail.com',
+  'vighram17@gmail.com',
+];
+
+export function checkIsAdmin(userOrEmail) {
+  if (!userOrEmail) return false;
+  let email = '';
+  let role = '';
+  if (typeof userOrEmail === 'string') {
+    email = userOrEmail.toLowerCase().trim();
+  } else {
+    email = (userOrEmail.email || '').toLowerCase().trim();
+    role = (userOrEmail.role || '').toLowerCase().trim();
+  }
+  if (ADMIN_EMAILS.includes(email)) return true;
+  if (role === 'admin' && ADMIN_EMAILS.includes(email)) return true;
+  return false;
+}
+
 /* ---------------- validation ---------------- */
 // Deliberately conservative: reject anything that isn't a plausible email/
 // phone/short text, and cap lengths so a malicious or buggy client can't
@@ -41,19 +62,16 @@ export function cleanText(v, maxLen = 2000) {
 // the caller should handle that case (see Signup.jsx).
 export async function signUpUser({ name, email, whatsapp, role, password }) {
   if (!supabase) throw new Error('Supabase is not configured yet.');
+  const targetRole = checkIsAdmin(email) ? 'admin' : (role || 'student');
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { name, whatsapp, role } }, // stored on the auth user too, as a convenience
+    options: { data: { name, whatsapp, role: targetRole } },
   });
   if (error) throw error;
 
-  // Only write the profile row if we already have a session (i.e. email
-  // confirmation is off, or was already satisfied) — RLS requires
-  // auth.uid() = id, so this insert fails harmlessly otherwise and the
-  // profile gets created on first login instead (see ensureProfile below).
   if (data.session) {
-    await supabase.from('profiles').upsert({ id: data.user.id, name, whatsapp, role });
+    await supabase.from('profiles').upsert({ id: data.user.id, name, whatsapp, role: targetRole });
   }
   return data;
 }
@@ -83,16 +101,25 @@ export async function getSession() {
   return data.session;
 }
 
-// Makes sure a profile row exists for the signed-in user (covers the case
-// where email confirmation delayed the original profile insert in signUpUser).
+// Makes sure a profile row exists for the signed-in user and elevates owner emails to admin
 export async function ensureProfile(authUser) {
   if (!supabase || !authUser) return null;
-  const { data: existing } = await supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
-  if (existing) return existing;
+  const isOwnerAdmin = checkIsAdmin(authUser.email);
   const meta = authUser.user_metadata || {};
+  const targetRole = isOwnerAdmin ? 'admin' : (meta.role || 'student');
+
+  const { data: existing } = await supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
+  if (existing) {
+    if (isOwnerAdmin && existing.role !== 'admin') {
+      const { data: updated } = await supabase.from('profiles').update({ role: 'admin' }).eq('id', authUser.id).select().maybeSingle();
+      return updated || { ...existing, role: 'admin' };
+    }
+    return existing;
+  }
+
   const { data, error } = await supabase
     .from('profiles')
-    .upsert({ id: authUser.id, name: meta.name || '', whatsapp: meta.whatsapp || '', role: meta.role || 'student' })
+    .upsert({ id: authUser.id, name: meta.name || '', whatsapp: meta.whatsapp || '', role: targetRole })
     .select()
     .single();
   if (error) { console.warn('ensureProfile failed', error); return null; }

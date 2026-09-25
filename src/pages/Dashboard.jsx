@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
-import { supabase } from '../lib/supabaseClient';
+import { checkIsAdmin, supabase } from '../lib/supabaseClient';
 import RequestCard from '../components/RequestCard.jsx';
 
 import { IconCheckCircle, IconPhone, IconShield } from '../components/Icons.jsx';
@@ -21,7 +21,7 @@ export default function Dashboard() {
   const [switching, setSwitching] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'posted', 'helping'
 
-  const isAdmin = user && (user.role === 'admin' || user.email?.toLowerCase().includes('admin'));
+  const isAdmin = checkIsAdmin(user);
 
   if (authLoading) return <div className="wrap" style={{ padding: '60px 0', textAlign: 'center' }}>Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
