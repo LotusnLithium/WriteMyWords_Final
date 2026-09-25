@@ -15,7 +15,7 @@ import {
 } from '../components/Icons.jsx';
 
 export default function AdminDashboard() {
-  const { user, login, logout, authLoading, toast } = useApp();
+  const { user, login, loginAsOwner, logout, authLoading, toast } = useApp();
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [usersList, setUsersList] = useState([]);
@@ -309,7 +309,7 @@ export default function AdminDashboard() {
                 className="btn btn-ghost btn-block"
                 onClick={async () => {
                   await logout();
-                  toast('Signed out. Please sign in with an owner email.');
+                  toast('Signed out. Please select an owner email.');
                 }}
                 style={{ color: '#9f1239', borderColor: '#fda4af', background: '#fff' }}
               >
@@ -317,62 +317,81 @@ export default function AdminDashboard() {
               </button>
             </div>
           ) : (
-            <form onSubmit={handleDirectLogin} style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Select Owner Account:</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                {ADMIN_EMAILS.map((email) => (
+            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Instant 1-Click Owner Verification (Saved to localStorage) */}
+              <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '16px' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
+                  ⚡ Instant 1-Click Owner Access
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {ADMIN_EMAILS.map((email) => (
+                    <button
+                      key={email}
+                      type="button"
+                      className="btn btn-primary btn-block"
+                      onClick={() => {
+                        loginAsOwner(email);
+                        toast(`Signed in as Owner: ${email}`);
+                      }}
+                      style={{
+                        background: '#1e1b4b',
+                        borderColor: '#4338ca',
+                        color: '#c7d2fe',
+                        fontSize: 13.5,
+                        padding: '11px 14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <IconShield size={16} color="#a5b4fc" /> 1-Click Sign In as {email}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Direct Supabase Credentials Form */}
+              <details style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                <summary style={{ fontSize: 13, color: 'var(--blue)', cursor: 'pointer', fontWeight: 600, padding: '4px 0' }}>
+                  Or enter Supabase password to sign in ▾
+                </summary>
+                <form onSubmit={handleDirectLogin} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div className="field">
+                    <label style={{ fontSize: 12 }}>Owner Email</label>
+                    <input
+                      type="email"
+                      value={adminEmail}
+                      onChange={(e) => setAdminEmail(e.target.value)}
+                      placeholder="e.g. varunsuthararts11@gmail.com"
+                      style={{ fontSize: 13 }}
+                      required
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label style={{ fontSize: 12 }}>Password</label>
+                    <input
+                      type="password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="••••••••"
+                      style={{ fontSize: 13 }}
+                      required
+                    />
+                  </div>
+
                   <button
-                    key={email}
-                    type="button"
-                    onClick={() => setAdminEmail(email)}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: adminEmail === email ? '2px solid var(--blue)' : '1px solid var(--border)',
-                      background: adminEmail === email ? '#eff6ff' : '#fff',
-                      fontSize: 13,
-                      fontWeight: adminEmail === email ? 700 : 500,
-                      color: adminEmail === email ? 'var(--blue)' : 'var(--ink)',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                    }}
+                    type="submit"
+                    className="btn btn-ghost btn-block"
+                    disabled={directLoginBusy}
+                    style={{ fontSize: 13.5 }}
                   >
-                    👤 {email}
+                    {directLoginBusy ? 'Signing In…' : 'Sign In with Password'}
                   </button>
-                ))}
-              </div>
-
-              <div className="field" style={{ marginTop: 4 }}>
-                <label style={{ fontSize: 12.5 }}>Owner Email</label>
-                <input
-                  type="email"
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="e.g. varunsuthararts11@gmail.com"
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label style={{ fontSize: 12.5 }}>Password</label>
-                <input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="btn btn-primary btn-block"
-                disabled={directLoginBusy}
-                style={{ background: '#1e1b4b', borderColor: '#4338ca', color: '#c7d2fe', fontSize: 14.5, padding: '12px 18px', marginTop: 4 }}
-              >
-                {directLoginBusy ? 'Signing In…' : 'Sign In to Owner Admin Central →'}
-              </button>
-            </form>
+                </form>
+              </details>
+            </div>
           )}
 
           <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
