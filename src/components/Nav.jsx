@@ -77,6 +77,11 @@ export default function Nav() {
                   <IconDashboard size={18} color="var(--blue)" /> <strong>Dashboard & My Projects</strong>
                 </Link>
               )}
+              {isAdmin && (
+                <Link to="/admin" className="mobile-nav-link" onClick={() => setMenuOpen(false)} style={{ color: '#4338ca', fontWeight: 600, background: '#eef2ff' }}>
+                  <IconShield size={18} color="#4338ca" /> <strong>Admin Central</strong>
+                </Link>
+              )}
               <Link to="/board" className="mobile-nav-link" onClick={() => setMenuOpen(false)}>
                 <IconList size={18} color="var(--ink-soft)" /> Browse Requests
               </Link>
@@ -128,12 +133,22 @@ export default function Nav() {
             <Link to="/board">Browse Requests</Link>
             <Link to="/post">Post Request</Link>
             {user && <Link to="/dashboard">Dashboard</Link>}
+            {isAdmin && (
+              <Link to="/admin" style={{ color: 'var(--blue)', fontWeight: 600 }}>
+                Admin Portal
+              </Link>
+            )}
           </nav>
 
           {/* Desktop Auth Buttons */}
           <div className="nav-right desktop-only">
             {user ? (
               <>
+                {isAdmin && (
+                  <Link to="/admin" className="btn btn-sm" style={{ background: '#1e1b4b', color: '#c7d2fe', border: '1px solid #4338ca', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <IconShield size={13} color="#a5b4fc" /> Admin
+                  </Link>
+                )}
                 <Link to="/dashboard" className="btn btn-ghost btn-sm">Dashboard</Link>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={handleLogout}>Log Out</button>
               </>
